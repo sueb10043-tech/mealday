@@ -94,7 +94,7 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .chip .x{color:var(--sub);margin-left:2px;font-size:18px;line-height:1;padding:0 2px}
 
 .meal{display:flex;gap:16px;width:100%;padding:14px 0;border-bottom:1px solid var(--line);align-items:flex-start}
-.thumb{width:156px;height:156px;border-radius:16px;overflow:hidden;background:var(--soft);flex:none;display:grid;place-items:center}
+.thumb{width:180px;height:136px;border-radius:16px;overflow:hidden;background:var(--soft);flex:none;display:grid;place-items:center}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block;min-height:0}
 /* 사진이 여러 장이어도 같은 크기 칸 안에 나눠 넣기 */
 .thumb.n2,.thumb.n3,.thumb.n4{gap:2px;place-items:stretch;background:#fff}
@@ -178,19 +178,20 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .month-nav{display:flex;align-items:center;justify-content:space-between;margin:10px 0 14px}
 .month-nav span{font-size:20px;font-weight:700}
 .month-nav button{width:40px;height:40px;font-size:24px;border-radius:20px;text-align:center}
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px 2px}
+.cal{margin:0 -14px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px 2px}
 .wd{color:#555;font-weight:600;font-size:13px;text-align:center;padding-bottom:6px}
-.cell{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;border-radius:14px;min-height:66px}
-.cell .dn{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;font-size:16px;color:#111;font-weight:500}
-.cell.today .dn{background:#111;color:#fff;font-weight:700}
+.cell{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:4px 0 4px 4px;overflow:visible;min-width:0;border-radius:14px;min-height:66px;border:2px solid transparent}
+.cell .dn{height:32px;display:flex;align-items:center;justify-content:flex-start;gap:0;font-size:15px;color:#111;font-weight:500;white-space:nowrap}
+.cell.today{border-color:#C2A27C;background:#FBF7F1}
+.cell.today .dn{font-weight:800}
 .cell.sun .dn{color:#E5484D}
 .cell.sat .dn{color:#2F6FE0}
-.cell.today .dn{color:#fff}
 .cell.future .dn{opacity:.55}
 .wd.sun{color:#E5484D}.wd.sat{color:#2F6FE0}
 .cdots{display:flex;gap:3px;height:7px;align-items:center}
 .cdots i{width:7px;height:7px;border-radius:50%;display:block}
-.cd-good{background:#9A6B3F}.cd-bad{background:#E5484D}.cd-ex{background:#2FA36B}
+.cd-good{background:#4A7FD6}.cd-bad{background:#3FAE6A}
+.cell .cex{font-size:9px;line-height:1;margin-left:3px;letter-spacing:-1px}
 .cal-legend{display:flex;justify-content:center;gap:14px;color:var(--sub);font-size:12px;margin:10px 0 0}
 .cal-legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:1px}
 .dots{display:flex;gap:3px;height:6px}
@@ -381,7 +382,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-35';
+const APP_VERSION = '2026-11-01-41';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -461,7 +462,7 @@ const demoApi = (() => {
         db.meals.filter(m => inM(m.date)).forEach(m => at(m.date).meals++);
         db.states.filter(s => inM(s.date)).forEach(s => { const o = at(s.date); o.states++; s.labels.filter(isToilet).forEach(l => { const ic = toiletIcon(l); if (o.toilet.indexOf(ic) < 0) o.toilet.push(ic); }); });
         db.workouts.filter(w => inM(w.date)).forEach(w => at(w.date).workouts.push({ name:w.name, minutes:w.minutes }));
-        Object.values(db.body).filter(b => inM(b.date)).forEach(b => { const o = at(b.date); o.weight = b.weight; o.muscle = b.muscle; });
+        Object.values(db.body).filter(b => inM(b.date)).forEach(b => { const o = at(b.date); o.weight = b.weight; o.muscle = b.muscle; o.waist = has(b.waist1) || has(b.waist2) ? 1 : 0; });
         return days;
       }
       case 'saveSettings': db.settings = p.settings; return db.settings;
@@ -1251,17 +1252,18 @@ function renderCal(data){
   for (let i = 0; i < offset; i++) cells += '<div></div>';
   for (let d = 1; d <= days; d++) {
     const ds = `${y}-${pad(m)}-${pad(d)}`, info = (data && data[ds]) || {};
-    // 색 점: 갈색 = 배변 좋음(👍), 빨강 = 배변 나쁨(👎), 초록 = 운동
+    // 색 점: 갈색 = 배변 좋음(👍), 빨강 = 배변 나쁨(👎) / 운동한 날은 날짜 오른쪽 위에 작게 🏃
     const tl = info.toilet || [];
-    const dots = (tl.some(t => t !== '👎') ? '<i class="cd-good"></i>' : '') + (tl.indexOf('👎') >= 0 ? '<i class="cd-bad"></i>' : '')
-      + ((info.workouts || []).length ? '<i class="cd-ex"></i>' : '');
+    const dots = (tl.some(t => t !== '👎') ? '<i class="cd-good"></i>' : '') + (tl.indexOf('👎') >= 0 ? '<i class="cd-bad"></i>' : '');
+    const ex = ((info.workouts || []).length ? '🏃' : '') + (info.waist ? '📏' : '');   // 운동 → 허리 치수 순서
+    const exHtml = ex ? `<span class="cex">${ex}</span>` : '';
     const wd = new Date(y, m - 1, d).getDay();
-    cells += `<button class="cell${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-date="${ds}"><span class="dn">${d}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="w mono">${(+info.weight).toFixed(1)}</span>` : ''}</button>`;
+    cells += `<button class="cell${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-date="${ds}"><span class="dn">${d}${exHtml}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="w mono">${(+info.weight).toFixed(1)}</span>` : ''}</button>`;
   }
   $('#view-cal').innerHTML = `
     <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월</span><button data-act="mnext">›</button></div>
     <div class="cal">${wds.map(w => `<div class="wd${w === '일' ? ' sun' : w === '토' ? ' sat' : ''}">${w}</div>`).join('')}${cells}</div>
-    <div class="cal-legend"><span><i class="cd-good"></i>배변 좋음</span><span><i class="cd-bad"></i>배변 나쁨</span><span><i class="cd-ex"></i>운동</span></div>
+    <div class="cal-legend"><span><i class="cd-good"></i>배변 좋음</span><span><i class="cd-bad"></i>배변 나쁨</span></div>
     <div class="set-label">이번 달 운동</div>
     <div class="chart">${data ? workoutSummary(data) : '<p class="empty" style="text-align:center">불러오는 중…</p>'}</div>`;
 }
@@ -1536,7 +1538,7 @@ async function drawExport(){
       y += boxH + 48;
     }
 
-    const SZ = 430;
+    const SZ = 540, SH = 430;   // 공유 이미지 사진 칸: 가로 540 × 세로 430
     const coverRect = (im, x, yy, w, h) => {
       ctx.save(); ctx.beginPath(); ctx.rect(x, yy, w, h); ctx.clip();
       const k = Math.max(w / im.width, h / im.height), iw = im.width * k, ih = im.height * k;
@@ -1544,16 +1546,16 @@ async function drawExport(){
       ctx.restore();
     };
     // 사진 칸(SZ×SZ) 하나 안에 여러 장을 나눠 그리기 — 앱 화면과 같은 배치
-    const drawPhotos = (ims, x, yy, s, r) => {
-      ctx.save(); rr(ctx, x, yy, s, s, r); ctx.clip();
-      ctx.fillStyle = '#fff'; ctx.fillRect(x, yy, s, s);
-      const g = 6, h = (s - g) / 2;
+    const drawPhotos = (ims, x, yy, s, sh, r) => {
+      ctx.save(); rr(ctx, x, yy, s, sh, r); ctx.clip();
+      ctx.fillStyle = '#fff'; ctx.fillRect(x, yy, s, sh);
+      const g = 6, w = (s - g) / 2, h = (sh - g) / 2;
       const n = Math.min(ims.length, 4);
       let cells;
-      if (n === 1) cells = [[x, yy, s, s]];
-      else if (n === 2) cells = [[x, yy, h, s], [x + h + g, yy, h, s]];
-      else if (n === 3) cells = [[x, yy, h, s], [x + h + g, yy, h, h], [x + h + g, yy + h + g, h, h]];
-      else cells = [[x, yy, h, h], [x + h + g, yy, h, h], [x, yy + h + g, h, h], [x + h + g, yy + h + g, h, h]];
+      if (n === 1) cells = [[x, yy, s, sh]];
+      else if (n === 2) cells = [[x, yy, w, sh], [x + w + g, yy, w, sh]];
+      else if (n === 3) cells = [[x, yy, w, sh], [x + w + g, yy, w, h], [x + w + g, yy + h + g, w, h]];
+      else cells = [[x, yy, w, h], [x + w + g, yy, w, h], [x, yy + h + g, w, h], [x + w + g, yy + h + g, w, h]];
       cells.forEach((c, i) => coverRect(ims[i], c[0], c[1], c[2], c[3]));
       if (ims.length > 4) {
         const c = cells[3];
@@ -1568,7 +1570,7 @@ async function drawExport(){
       let px = x2;
       ts.forEach(t => {
         ctx.font = `700 32px ${F}`;
-        const label = `${t.emoji} ${t.name}`, pw = ctx.measureText(label).width + 52;
+        const label = ts.length >= 3 ? t.emoji : `${t.emoji} ${t.name}`, pw = ctx.measureText(label).width + 52;   // 태그 3개 이상이면 이모지만
         ctx.fillStyle = t.color; rr(ctx, px, yy + 6, pw, 60, 30); ctx.fill();
         ctx.fillStyle = '#222'; ctx.textBaseline = 'middle'; ctx.fillText(label, px + 26, yy + 37); ctx.textBaseline = 'top';
         px += pw + 12;
@@ -1582,14 +1584,14 @@ async function drawExport(){
       const x2 = P + SZ + 44, w2 = W - P - x2;
       ctx.font = `400 32px ${F}`;
       const memo = m.memo ? m.memo.split('\n').reduce((a, s) => a.concat(wrap(ctx, s, w2)), []) : [];
-      const rowH = Math.max(SZ, 86 + 48 + (memo.length ? 16 + memo.length * 46 : 0));
+      const rowH = Math.max(SH, 86 + 48 + (memo.length ? 16 + memo.length * 46 : 0));
       if (draw) {
-        if (ims.length) drawPhotos(ims, P, y, SZ, 40);
+        if (ims.length) drawPhotos(ims, P, y, SZ, SH, 40);
         else {
-          ctx.save(); rr(ctx, P, y, SZ, SZ, 40); ctx.clip();
-          ctx.fillStyle = '#F2F1EE'; ctx.fillRect(P, y, SZ, SZ);
+          ctx.save(); rr(ctx, P, y, SZ, SH, 40); ctx.clip();
+          ctx.fillStyle = '#F2F1EE'; ctx.fillRect(P, y, SZ, SH);
           ctx.font = `110px ${F}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(t.emoji, P + SZ / 2, y + SZ / 2 + 6);
+          ctx.fillText(t.emoji, P + SZ / 2, y + SH / 2 + 6);
           ctx.textAlign = 'left'; ctx.textBaseline = 'top';
           ctx.restore();
         }
