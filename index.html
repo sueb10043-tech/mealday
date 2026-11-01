@@ -348,7 +348,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-19';
+const APP_VERSION = '2026-11-01-20';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -498,20 +498,27 @@ async function flush(){
   if (flushing || DEMO) return;
   if (!qLoad().length) return;
   flushing = true; $('#saving').classList.add('show');
-  let failed = false;
   try {
     while (true) {
       const q = qLoad(); if (!q.length) break;
-      await call(q[0].action, q[0].payload);
-      const q2 = qLoad(); q2.shift(); qSave(q2);
+      try {
+        await call(q[0].action, q[0].payload);
+        const q2 = qLoad(); q2.shift(); qSave(q2);
+      } catch(e){
+        // 같은 항목이 3번 실패하면 목록에서 빼고 이유를 알려줘요 (계속 막혀 있지 않도록)
+        const q2 = qLoad(); if (!q2.length) break;
+        q2[0].tries = (q2[0].tries || 0) + 1;
+        const msg = (e && e.message) || e;
+        if (q2[0].tries >= 3) { q2.shift(); qSave(q2); toast('저장하지 못한 기록이 있어요: ' + msg); continue; }
+        qSave(q2);
+        toast('아직 저장하지 못했어요. 다음에 다시 보낼게요');
+        break;
+      }
     }
-  } catch(e){
-    failed = true;
-    toast('아직 저장하지 못했어요. 다음에 앱을 열 때 다시 보낼게요');
   } finally {
     flushing = false;
     if (!pendingSaves) $('#saving').classList.remove('show');
-    if (!failed) loadDay();
+    loadDay(true);   // 보낸 뒤에는 늘 서버의 최신 기록을 받아와요
   }
 }
 function cacheDay(){ if (!DEMO && S.day) lsSet('md_day_' + S.day.date, JSON.stringify(S.day)); }
@@ -585,12 +592,12 @@ function getTag(id){ if (!id) return NO_TAG; return (S.settings.tags.find(t => t
 function pill(t){ return t.name ? `<span class="tag-pill" style="background:${t.color}">${esc(t.emoji)} ${esc(t.name)}</span>` : ''; }
 
 /* ───── 오늘 화면 ───── */
-async function loadDay(){
+async function loadDay(afterFlush){
   const date = S.date;
   if (!DEMO && (!S.day || S.day.date !== date)) {
     try { const c = JSON.parse(lsGet('md_day_' + date) || 'null'); if (c) { S.day = c; renderToday(); } } catch(e){}
   }
-  if (!DEMO && qLoad().length && S.day && S.day.date === date) { flush(); return; }   // 아직 보낼 게 남았으면 화면 그대로
+  if (!DEMO && !afterFlush && qLoad().length) { flush(); return; }   // 보낼 게 남았으면 먼저 보내고, 끝나면 최신 기록을 받아와요
   $('#todayBody').style.opacity = S.day && S.day.date === date ? 1 : .5;
   try {
     const d = await call('getDay', { date });
