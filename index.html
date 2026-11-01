@@ -1,8 +1,16 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<base target="_top">
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>mealday</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="mealday">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-512.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
@@ -22,6 +30,7 @@ input,textarea,select{font:inherit;color:inherit}
 .logo{font-family:"Cormorant Garamond",Georgia,serif;font-style:italic;font-weight:700;font-size:30px;color:#a9a59d;letter-spacing:.2px;line-height:1}
 .top-btns{display:flex;gap:4px}
 .demo-tag{position:sticky;top:0;z-index:30;text-align:center;font-size:12px;color:#7a6a4f;background:#FBF2C6;padding:calc(env(safe-area-inset-top) + 6px) 12px 6px}
+.demo-tag button{margin-left:8px;padding:3px 10px;border-radius:999px;background:#111;color:#fff;font-size:12px;font-weight:600}
 .icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:20px}
 .back-btn{display:inline-flex;align-items:center;gap:2px;height:40px;color:var(--sub);font-size:17px}
 .icon-btn:active{background:var(--soft)}
@@ -329,7 +338,15 @@ const S = {
 };
 
 /* ───── 미리보기 모드 (Apps Script 밖에서 열었을 때 예시 데이터로 동작) ───── */
-const DEMO = !(window.google && google.script && google.script.run);
+/* ───── 서버 연결 ─────
+ * EXEC_URL: Apps Script 웹 앱 주소(…/exec).
+ * GitHub 저장소가 '공개'라면 여기는 비워 두세요. 휴대폰에서 처음 한 번 주소를 붙여넣으면 그 기기에만 저장돼요.
+ * (공개 저장소에 주소를 적으면 누구나 코드를 보고 내 기록에 접근할 수 있어요.)
+ */
+const EXEC_URL = '';
+const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
+const EXEC = EXEC_URL || lsGet('md_exec') || '';
+const DEMO = !IN_GAS && !EXEC;
 const demoApi = (() => {
   if (!DEMO) return null;
   const tags = [
@@ -428,6 +445,20 @@ function call(action, payload){
       catch(e){ reject(e); }
     }, 120));
   }
+  if (!IN_GAS) {
+    return fetch(EXEC, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // 이렇게 보내야 다른 사이트에서도 막히지 않아요
+      body: JSON.stringify({ api: 1, action, payload: payload || {} })
+    }).then(res => {
+      if (!res.ok) throw new Error('서버 응답 오류 (' + res.status + ')');
+      return res.json();
+    }).then(r => {
+      if (!r) throw new Error('응답이 없어요');
+      if (r.error) throw new Error(r.error);
+      return r.data;
+    });
+  }
   return new Promise((resolve, reject) => {
     google.script.run
       .withSuccessHandler(r => {
@@ -448,14 +479,46 @@ async function boot(){
   if (DEMO) {
     const tag = document.createElement('div');
     tag.className = 'demo-tag';
-    tag.textContent = '미리보기 모드 · 예시 데이터 (저장되지 않아요)';
+    tag.innerHTML = '미리보기 모드 · 예시 데이터 <button id="connectBtn">내 기록 연결</button>';
     document.body.prepend(tag);
+    $('#connectBtn').onclick = openConnectSheet;
+  }
+  // 지난번 내용을 먼저 바로 보여주고, 그 사이 서버에서 새로 받아와요
+  if (!DEMO) {
+    pruneCache();
+    try {
+      const st = JSON.parse(lsGet('md_settings') || 'null');
+      const day = JSON.parse(lsGet('md_day_' + S.date) || 'null');
+      if (st) { S.settings = st; if (day) { S.day = day; renderToday(); } }
+    } catch(e){}
   }
   try {
     const r = await call('init');
     S.settings = r.settings; S.lastSync = r.lastSync || '';
+    lsSet('md_settings', JSON.stringify(r.settings));
     await loadDay();
   } catch(e){ fail(e); }
+}
+function pruneCache(){
+  try {
+    const limit = addDays(todayStr(), -14);
+    Object.keys(localStorage).forEach(k => { if (k.indexOf('md_day_') === 0 && k.slice(7) < limit) localStorage.removeItem(k); });
+  } catch(e){}
+}
+function openConnectSheet(){
+  openSheet({
+    title: '내 기록 연결',
+    html: `<div class="group"><div class="field" style="flex-direction:column;align-items:stretch;gap:8px">
+        <span>Apps Script 웹 앱 주소</span>
+        <input id="execIn" class="plain" style="text-align:left;font-size:14px" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(lsGet('md_exec') || '')}">
+      </div></div>
+      <p class="hint">단축어에 넣은 exec 주소를 그대로 붙여넣어 주세요. 이 기기에만 저장돼요.</p>`,
+    async save(){
+      const v = $('#execIn').value.trim();
+      if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(v)) { toast('…/exec 로 끝나는 주소를 붙여넣어 주세요'); return false; }
+      lsSet('md_exec', v); location.reload();
+    }
+  });
 }
 
 /* ───── 태그 ───── */
@@ -466,11 +529,15 @@ function pill(t){ return t.name ? `<span class="tag-pill" style="background:${t.
 /* ───── 오늘 화면 ───── */
 async function loadDay(){
   const date = S.date;
-  $('#todayBody').style.opacity = .5;
+  if (!DEMO && (!S.day || S.day.date !== date)) {
+    try { const c = JSON.parse(lsGet('md_day_' + date) || 'null'); if (c) { S.day = c; renderToday(); } } catch(e){}
+  }
+  $('#todayBody').style.opacity = S.day && S.day.date === date ? 1 : .5;
   try {
     const d = await call('getDay', { date });
     if (date !== S.date) return;
     S.day = d; if (d.lastSync) S.lastSync = d.lastSync;
+    if (!DEMO) lsSet('md_day_' + date, JSON.stringify(d));
     renderToday();
     loadPhotos(d.meals);
   } catch(e){ fail(e); }
@@ -900,7 +967,7 @@ function chartSvg(data, days){
 }
 
 /* ───── 설정 ───── */
-async function saveSettings(){ S.settings = await call('saveSettings', { settings: S.settings }); if (S.tab === 'set') renderSet(); }
+async function saveSettings(){ S.settings = await call('saveSettings', { settings: S.settings }); if (!DEMO) lsSet('md_settings', JSON.stringify(S.settings)); if (S.tab === 'set') renderSet(); }
 function renderSet(){
   const st = S.settings;
   const handle = '<span class="drag" aria-label="끌어서 순서 바꾸기">≡</span>';
@@ -930,7 +997,8 @@ function renderSet(){
 
     <div class="set-label">건강 앱 동기화</div>
     <div class="group"><div class="field"><span>단축어 이름</span><input id="scName" class="plain" value="${esc(st.shortcutName || DEFAULT_SC)}"></div></div>
-    <p class="hint">동기화 버튼을 누르면 이 이름의 단축어가 실행돼요.</p>`;
+    <p class="hint">동기화 버튼을 누르면 이 이름의 단축어가 실행돼요.</p>
+    ${!IN_GAS && !EXEC_URL ? `<div class="group" style="margin-top:26px"><button class="field link" data-act="connect">내 기록 연결 주소 바꾸기</button></div>` : ''}`;
   bindSortables();
 }
 /* 끌어서 순서 바꾸기: ≡ 를 누른 채 위아래로 */
@@ -1263,6 +1331,7 @@ function bind(){
         case 'tag': openTagSheet(st.tags.find(t => t.id === el.dataset.id)); break;
         case 'tag-new': openTagSheet(); break;
         case 'back': setTab('today'); break;
+        case 'connect': openConnectSheet(); break;
         case 'chip': openChipSheet(+el.dataset.i); break;
         case 'chip-new': openChipSheet(-1); break;
         case 'ws': st.weekStart = el.dataset.v; await saveSettings(); break;
