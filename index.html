@@ -48,6 +48,16 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .m-val{font-size:15px;font-weight:600;white-space:nowrap;letter-spacing:-.3px}
 .m-val small{font-size:10px;color:var(--sub);margin-left:1px;font-weight:400;letter-spacing:0}
 .act-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.wk-list{margin-top:8px}
+.wk{display:flex;align-items:center;gap:14px;width:100%;padding:12px 0;border-bottom:1px solid var(--line)}
+.wk:last-child{border-bottom:0}
+.wk-ic{width:46px;height:46px;border-radius:50%;background:#FDEDE7;display:grid;place-items:center;font-size:22px;flex:none}
+.wk-main{flex:1;min-width:0}
+.wk-name{font-size:15px;color:#555;display:flex;align-items:center;gap:6px}
+.wk-kcal{font-size:22px;font-weight:800;letter-spacing:-.5px;margin:2px 0}
+.wk-sub{font-size:14px;color:var(--sub)}
+.wk-auto{font-size:11px;color:#c0613c;background:#FDEDE7;border-radius:6px;padding:2px 6px}
+.wk-pick{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 10px}
 .steps{font-size:15px;margin-right:4px}
 .state-chips{width:100%;padding:2px 0}
 .head-acts{display:flex;align-items:center;gap:8px}
@@ -349,7 +359,8 @@ const demoApi = (() => {
     db.activity[d].water = String(db.activity[d].waterLog.split(',').reduce((a, n) => a + +n, 0));
     const lb = [['💩👍'], ['💩👎', '더부룩함'], ['가스참'], ['💩👍']][i % 4];
     db.states.push({ id:nid(), date:d, time:'21:00', labels: lb });
-    if (i % 3 === 0) db.workouts.push({ id:nid(), date:d, time:'19:30', name:'걷기', minutes:35, source:'health' });
+    if (i % 3 === 0) db.workouts.push({ id:nid(), date:d, time:'', name:'운동', minutes:80, source:'health' });
+    if (i % 3 === 1) db.workouts.push({ id:nid(), date:d, time:'12:44', name:'전신근력운동', minutes:44, kcal:131, source:'edited' }, { id:nid(), date:d, time:'13:28', name:'걷기', minutes:36, kcal:168, source:'edited' });
   }
   db.diary[today] = '미리보기용 예시 일기예요. 실제 배포하면 내 기록이 보여요.';
   db.lastSync = today + ' 07:35';
@@ -381,7 +392,7 @@ const demoApi = (() => {
       case 'saveWorkout': {
         let w = db.workouts.find(x => x.id === p.id);
         if (!w) { w = { id:nid() }; db.workouts.push(w); }
-        Object.assign(w, { date:p.date, time:p.time, name:p.name, minutes:p.minutes, source:p.source || 'manual' }); return w;
+        Object.assign(w, { date:p.date, time:p.time, name:p.name, minutes:p.minutes, kcal:p.kcal, source:p.source || 'manual' }); return w;
       }
       case 'deleteWorkout': db.workouts = db.workouts.filter(x => x.id !== p.id); return true;
       case 'saveDiary': db.diary[p.date] = p.text || ''; return true;
@@ -509,8 +520,31 @@ function openWaterSheet(){
     async save(){ await call('saveWater', { date: S.date, log }); await loadDay(); }
   });
 }
-function workoutLabel(w){
-  return (w.source === 'health' && w.time ? korTime(w.time) + ' ' : '') + esc(w.name) + (has(w.minutes) ? ' ' + w.minutes + '분' : '');
+const WK_PRESETS = ['걷기', '전신근력운동', '달리기', '요가', '필라테스', '자전거', '수영'];
+function workoutIcon(name){
+  const n = String(name);
+  if (/걷|산책/.test(n)) return '🚶';
+  if (/달리|러닝|조깅/.test(n)) return '🏃';
+  if (/근력|웨이트|헬스/.test(n)) return '🏋️';
+  if (/요가|필라|스트레칭/.test(n)) return '🧘';
+  if (/자전거|사이클/.test(n)) return '🚴';
+  if (/수영/.test(n)) return '🏊';
+  if (/등산|하이킹/.test(n)) return '🥾';
+  return '💪';
+}
+function workoutText(w){
+  return [has(w.minutes) ? w.minutes + '분' : '', has(w.kcal) ? w.kcal + 'kcal' : '', w.time ? korTime(w.time) : ''].filter(Boolean).join(' · ');
+}
+// 운동 기록 한 줄: 아이콘 · 이름 · kcal · 시간 · 시각
+function workoutRow(w){
+  const auto = w.source === 'health';
+  return `<button class="wk" data-act="workout-edit" data-id="${w.id}">
+    <span class="wk-ic">${workoutIcon(w.name)}</span>
+    <span class="wk-main">
+      <span class="wk-name">${esc(w.name)}${auto ? '<span class="wk-auto">건강 앱 · 눌러서 자세히</span>' : ''}</span>
+      ${has(w.kcal) ? `<span class="wk-kcal" style="display:block">${w.kcal}kcal</span>` : ''}
+      <span class="wk-sub" style="display:block">${[has(w.minutes) ? w.minutes + '분' : '', w.time ? korTime(w.time) : ''].filter(Boolean).join(' · ')}</span>
+    </span></button>`;
 }
 function toiletIcon(l){ return String(l).replace(/💩/g, '').trim() || '💩'; }
 function isToilet(l){ return String(l).indexOf('💩') >= 0; }
@@ -543,7 +577,8 @@ function renderToday(){
   h += `<section class="sec"><div class="sec-head"><span>신체 · 운동</span><span class="sync-mini">${S.lastSync ? fmtSync(S.lastSync) : ''}<a class="sync-btn" target="_top" href="shortcuts://run-shortcut?name=${encodeURIComponent(sc)}">↻ 동기화</a></span></div>`;
   h += `<button class="metrics" data-act="body">${cell('체중', b.weight, 'kg')}${cell('체지방', b.bodyFat, '%')}${cell('BMI', b.bmi, '')}${cell('골격근', b.muscle, 'kg')}${cell('허리1', b.waist1, 'cm')}${cell('허리2', b.waist2, 'cm')}</button>`;
   const steps = d.activity && has(d.activity.steps) ? Number(d.activity.steps).toLocaleString('ko-KR') + '걸음' : '—';
-  h += `<div class="act-line"><span class="steps mono">👟 ${steps}</span>${d.workouts.map(w => `<button class="chip sm" data-act="workout-edit" data-id="${w.id}">${workoutLabel(w)}</button>`).join('')}<button class="chip sm add" data-act="workout-new">＋ 운동</button></div>`;
+  h += `<div class="act-line"><span class="steps mono">👟 ${steps}</span><button class="chip sm add" data-act="workout-new">＋ 운동</button></div>`;
+  if (d.workouts.length) h += `<div class="wk-list">${d.workouts.map(workoutRow).join('')}</div>`;
   h += `</section>`;
 
   h += `<section class="sec"><div class="sec-head"><span>식사</span></div>`;
@@ -766,20 +801,28 @@ function openBodySheet(){
 
 /* 운동 */
 function openWorkoutSheet(w){
-  const isNew = !w;
+  const isNew = !w, auto = w && w.source === 'health';
   openSheet({
     title: '운동',
-    html: `<div class="group">
-        <div class="field"><span>운동</span><input id="wName" class="plain" placeholder="예: 걷기" value="${esc(w ? w.name : '')}"></div>
+    html: `<div class="wk-pick">${WK_PRESETS.map(n => `<button class="chip sm" data-wk="${n}">${workoutIcon(n)} ${n}</button>`).join('')}</div>
+      <div class="group">
+        <div class="field"><span>운동</span><input id="wName" class="plain" placeholder="예: 걷기" value="${esc(w && !(auto && w.name === '운동') ? w.name : '')}"></div>
         <div class="field"><span>시간</span><div class="num"><input id="wMin" type="text" inputmode="numeric" value="${w && has(w.minutes) ? w.minutes : ''}" placeholder="0"><em>분</em></div></div>
+        <div class="field"><span>칼로리</span><div class="num"><input id="wKcal" type="text" inputmode="numeric" value="${w && has(w.kcal) ? w.kcal : ''}" placeholder="0"><em>kcal</em></div></div>
+        <div class="field"><span>시작 시각</span><input type="time" id="wTime" value="${(w && w.time) || nowTime()}"></div>
       </div>
-      ${w && w.source === 'health' ? '<p class="hint">건강 앱에서 가져온 기록이라, 고쳐도 다음 동기화 때 건강 앱 내용으로 다시 바뀌어요.</p>' : ''}
+      ${w && w.source === 'health' ? '<p class="hint">건강 앱에서 자동으로 가져온 기록이에요. 이름이나 시간을 고쳐 저장하면, 그날은 더 이상 자동으로 덮어쓰지 않아요.</p>' : ''}
       ${isNew ? '' : '<button class="del-btn" id="wDelete">이 기록 삭제</button>'}`,
-    mount(){ armDelete($('#wDelete'), async () => { await call('deleteWorkout', { id: w.id }); await loadDay(); }); },
+    mount(){
+      $('.wk-pick').onclick = e => { const b = e.target.closest('[data-wk]'); if (b) $('#wName').value = b.dataset.wk; };
+      armDelete($('#wDelete'), async () => { await call('deleteWorkout', { id: w.id }); await loadDay(); });
+    },
     async save(){
       const name = $('#wName').value.trim();
-      if (!name) { toast('운동 이름을 적어 주세요'); return false; }
-      await call('saveWorkout', { id: w && w.id, date: w ? w.date : S.date, time: w ? w.time : nowTime(), name, minutes: parseInt($('#wMin').value, 10) || '', source: w ? w.source : 'manual' });
+      if (!name) { toast('운동 이름을 적거나 위에서 골라 주세요'); return false; }
+      await call('saveWorkout', { id: w && w.id, date: w ? w.date : S.date, time: $('#wTime').value || '', name,
+        minutes: parseInt($('#wMin').value, 10) || '', kcal: parseInt($('#wKcal').value, 10) || '',
+        source: !w ? 'manual' : (w.source === 'health' ? 'edited' : w.source) });
       await loadDay();
     }
   });
@@ -1042,7 +1085,7 @@ async function drawExport(){
   if (S.exOpt.act) {
     const act = [];
     if (d.activity && has(d.activity.steps)) act.push(`${Number(d.activity.steps).toLocaleString('ko-KR')}걸음`);
-    d.workouts.forEach(w => act.push((w.source === 'health' && w.time ? korTime(w.time) + ' ' : '') + w.name + (has(w.minutes) ? ' ' + w.minutes + '분' : '')));
+    d.workouts.forEach(w => act.push(w.name + (workoutText(w) ? ' ' + workoutText(w) : '')));
     if (act.length) info.push(['운동', act.join('  ·  ')]);
   }
 
