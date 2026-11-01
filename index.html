@@ -95,8 +95,15 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .chip .x{color:var(--sub);margin-left:2px;font-size:18px;line-height:1;padding:0 2px}
 
 .meal{display:flex;gap:16px;width:100%;padding:14px 0;border-bottom:1px solid var(--line);align-items:flex-start}
-.thumb{width:84px;height:84px;border-radius:16px;overflow:hidden;background:var(--soft);flex:none;display:grid;place-items:center}
-.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb{width:104px;height:104px;border-radius:16px;overflow:hidden;background:var(--soft);flex:none;display:grid;place-items:center}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;min-height:0}
+/* 사진이 여러 장이어도 같은 크기 칸 안에 나눠 넣기 */
+.thumb.n2,.thumb.n3,.thumb.n4{gap:2px;place-items:stretch;background:#fff}
+.thumb.n2{grid-template-columns:1fr 1fr}
+.thumb.n3,.thumb.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.thumb.n3 .pc:first-child{grid-row:span 2}
+.thumb .pc{position:relative;overflow:hidden;min-height:0;background:var(--soft)}
+.thumb .more{position:absolute;inset:0;background:rgba(0,0,0,.45);color:#fff;font-weight:700;font-size:16px;display:grid;place-items:center}
 .thumb-emoji{font-size:34px}
 .meal-info{flex:1;min-width:0;padding-top:4px}
 .meal-top{display:flex;align-items:center;gap:10px}
@@ -242,9 +249,6 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .ph-row .lunch-btn span,.ph-grid .lunch-btn span{font-size:26px}
 .ph-grid .lunch-btn{gap:6px;font-size:15px}
 .ph-grid .ph-add{height:auto;aspect-ratio:1/1}
-.meal.multi{flex-direction:column;gap:10px}
-.meal-photos{display:grid;gap:6px;width:100%}
-.meal-photos img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:14px;background:var(--soft);display:block}
 </style>
 </head>
 <body>
@@ -348,7 +352,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-20';
+const APP_VERSION = '2026-11-01-22';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -729,17 +733,18 @@ function renderToday(){
 }
 
 function photoImg(id){ return `<img data-photo="${id}"${S.photos[id] ? ` src="${S.photos[id]}"` : ''} alt="">`; }
+// 사진은 항상 왼쪽 같은 크기 칸, 글은 오른쪽. 여러 장이면 칸 안에서 나눠요 (2장: 좌우, 3장: 큰 1 + 작은 2, 4장 이상: 2×2, 5장부터 +N)
+function photoBox(ids, emoji){
+  if (!ids.length) return `<div class="thumb"><span class="thumb-emoji">${esc(emoji)}</span></div>`;
+  if (ids.length === 1) return `<div class="thumb">${photoImg(ids[0])}</div>`;
+  const n = Math.min(ids.length, 4), extra = ids.length - 4;
+  return `<div class="thumb n${n}">${ids.slice(0, 4).map((id, i) =>
+    `<span class="pc">${photoImg(id)}${i === 3 && extra > 0 ? `<span class="more">+${extra}</span>` : ''}</span>`).join('')}</div>`;
+}
 function mealCard(m){
   const t = getTag(m.tag), ids = photoIds(m);
   const info = `<div class="meal-info"><div class="meal-top">${pill(t)}<span class="time mono">${korTime(m.time)}</span></div>${m.memo ? `<div class="memo">${esc(m.memo)}</div>` : ''}</div>`;
-  if (ids.length >= 2) {
-    // 사진이 여러 장이면 글 아래에 사진을 모두 나란히
-    const cols = ids.length === 2 || ids.length === 4 ? 2 : 3;
-    return `<button class="meal multi" data-act="meal-edit" data-id="${m.id}">${info}
-      <div class="meal-photos" style="grid-template-columns:repeat(${cols},1fr)">${ids.map(photoImg).join('')}</div></button>`;
-  }
-  return `<button class="meal" data-act="meal-edit" data-id="${m.id}">
-    <div class="thumb">${ids.length ? photoImg(ids[0]) : `<span class="thumb-emoji">${esc(t.emoji)}</span>`}</div>${info}</button>`;
+  return `<button class="meal" data-act="meal-edit" data-id="${m.id}">${photoBox(ids, t.emoji)}${info}</button>`;
 }
 
 /* ───── 아래에서 올라오는 창 ───── */
@@ -813,7 +818,8 @@ function openMealSheet(meal){
   const isNew = !meal;
   const m = meal ? Object.assign({}, meal) : { date: S.date, time: nowTime(), tag: '', memo: '', photoId: '' };
   // 화면에 보이는 사진 순서: { id } = 저장된 사진, { data } = 새로 고른 사진
-  const items = photoIds(m).map(id => ({ id }));
+  // 아직 서버에 저장 중인 사진(임시 이름)은 사진 데이터 그대로 다시 보내요
+  const items = photoIds(m).map(id => /^tmp/.test(id) ? (S.photos[id] ? { data: S.photos[id] } : null) : { id }).filter(Boolean);
   const tags = S.settings.tags;
   openSheet({
     title: '식사 입력',
@@ -1286,10 +1292,31 @@ async function drawExport(){
     }
 
     const SZ = 300;
-    const drawCover = (im, x, yy, s, r) => {
+    const coverRect = (im, x, yy, w, h) => {
+      ctx.save(); ctx.beginPath(); ctx.rect(x, yy, w, h); ctx.clip();
+      const k = Math.max(w / im.width, h / im.height), iw = im.width * k, ih = im.height * k;
+      ctx.drawImage(im, x + (w - iw) / 2, yy + (h - ih) / 2, iw, ih);
+      ctx.restore();
+    };
+    // 사진 칸(SZ×SZ) 하나 안에 여러 장을 나눠 그리기 — 앱 화면과 같은 배치
+    const drawPhotos = (ims, x, yy, s, r) => {
       ctx.save(); rr(ctx, x, yy, s, s, r); ctx.clip();
-      const k = Math.max(s / im.width, s / im.height), iw = im.width * k, ih = im.height * k;
-      ctx.drawImage(im, x + (s - iw) / 2, yy + (s - ih) / 2, iw, ih);
+      ctx.fillStyle = '#fff'; ctx.fillRect(x, yy, s, s);
+      const g = 6, h = (s - g) / 2;
+      const n = Math.min(ims.length, 4);
+      let cells;
+      if (n === 1) cells = [[x, yy, s, s]];
+      else if (n === 2) cells = [[x, yy, h, s], [x + h + g, yy, h, s]];
+      else if (n === 3) cells = [[x, yy, h, s], [x + h + g, yy, h, h], [x + h + g, yy + h + g, h, h]];
+      else cells = [[x, yy, h, h], [x + h + g, yy, h, h], [x, yy + h + g, h, h], [x + h + g, yy + h + g, h, h]];
+      cells.forEach((c, i) => coverRect(ims[i], c[0], c[1], c[2], c[3]));
+      if (ims.length > 4) {
+        const c = cells[3];
+        ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(c[0], c[1], c[2], c[3]);
+        ctx.fillStyle = '#fff'; ctx.font = `700 44px ${F}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('+' + (ims.length - 4), c[0] + c[2] / 2, c[1] + c[3] / 2);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      }
       ctx.restore();
     };
     const drawText = (m, t, x2, yy, memo) => {
@@ -1305,27 +1332,12 @@ async function drawExport(){
     };
     meals.forEach(m => {
       const t = getTag(m.tag), ims = imgs[m.id] || [];
-      if (ims.length >= 2) {
-        // 여러 장: 글을 먼저 쓰고, 그 아래에 사진을 모두 나란히
-        const fullW = W - 2 * P;
-        ctx.font = `400 32px ${F}`;
-        const memo = m.memo ? m.memo.split('\n').reduce((a, s) => a.concat(wrap(ctx, s, fullW)), []) : [];
-        const textH = 86 + 48 + (memo.length ? 16 + memo.length * 46 : 0);
-        const cols = ims.length === 2 || ims.length === 4 ? 2 : 3, gap = 16;
-        const cell = (fullW - gap * (cols - 1)) / cols, rowsN = Math.ceil(ims.length / cols);
-        if (draw) {
-          drawText(m, t, P, y, memo);
-          ims.forEach((im, i) => drawCover(im, P + (i % cols) * (cell + gap), y + textH + 20 + Math.floor(i / cols) * (cell + gap), cell, 32));
-        }
-        y += textH + 20 + rowsN * cell + (rowsN - 1) * gap + 48;
-        return;
-      }
       const x2 = P + SZ + 44, w2 = W - P - x2;
       ctx.font = `400 32px ${F}`;
       const memo = m.memo ? m.memo.split('\n').reduce((a, s) => a.concat(wrap(ctx, s, w2)), []) : [];
       const rowH = Math.max(SZ, 86 + 48 + (memo.length ? 16 + memo.length * 46 : 0));
       if (draw) {
-        if (ims[0]) drawCover(ims[0], P, y, SZ, 40);
+        if (ims.length) drawPhotos(ims, P, y, SZ, 40);
         else {
           ctx.save(); rr(ctx, P, y, SZ, SZ, 40); ctx.clip();
           ctx.fillStyle = '#F2F1EE'; ctx.fillRect(P, y, SZ, SZ);
