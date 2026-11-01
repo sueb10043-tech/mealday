@@ -211,6 +211,8 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .ex-scroll img{width:100%;border-radius:16px;box-shadow:0 4px 18px rgba(0,0,0,.08);background:#fff;-webkit-touch-callout:default;display:block}
 #exMsg{text-align:center;color:var(--sub);font-size:13px;padding:4px 20px calc(16px + env(safe-area-inset-bottom));margin:0}
 
+.saving{position:fixed;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);background:rgba(20,20,20,.75);color:#fff;font-size:12px;padding:5px 12px;border-radius:999px;z-index:65;opacity:0;transition:opacity .2s;pointer-events:none}
+.saving.show{opacity:1}
 .toast{position:fixed;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:rgba(20,20,20,.88);color:#fff;padding:11px 18px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:70;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%)}
 
@@ -307,6 +309,7 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 </div>
 
 <div id="toast" class="toast"></div>
+<div id="saving" class="saving">저장 중…</div>
 <input type="file" id="photoInput" class="file-in" accept="image/*" multiple>
 
 <script>
@@ -471,6 +474,46 @@ function call(action, payload){
   });
 }
 function fail(e){ toast('오류: ' + ((e && e.message) || e)); }
+/* 화면에는 먼저 반영하고, 서버 저장은 뒤에서 해요.
+ * 보낼 내용은 먼저 휴대폰에 '보낼 목록'으로 적어 두고 차례로 보내요.
+ * 보내는 중에 앱을 닫아도 다음에 열 때 남은 것부터 다시 보내요. */
+function qLoad(){ try { return JSON.parse(localStorage.getItem('md_queue') || '[]'); } catch(e){ return []; } }
+function qSave(q){ try { localStorage.setItem('md_queue', JSON.stringify(q)); return true; } catch(e){ return false; } }
+let pendingSaves = 0;
+function bg(promise){   // 미리보기용 / 목록에 못 적는 경우
+  pendingSaves++; $('#saving').classList.add('show');
+  return promise.catch(e => { toast('저장하지 못했어요: ' + ((e && e.message) || e)); })
+    .finally(() => { pendingSaves--; if (!pendingSaves && !flushing) { $('#saving').classList.remove('show'); loadDay(); } });
+}
+function send(action, payload){
+  if (DEMO) return bg(call(action, payload));
+  const q = qLoad(); q.push({ action, payload });
+  if (!qSave(q)) return bg(call(action, payload));   // 사진이 너무 커서 못 적으면 바로 보내기
+  flush();
+}
+let flushing = false;
+async function flush(){
+  if (flushing || DEMO) return;
+  if (!qLoad().length) return;
+  flushing = true; $('#saving').classList.add('show');
+  let failed = false;
+  try {
+    while (true) {
+      const q = qLoad(); if (!q.length) break;
+      await call(q[0].action, q[0].payload);
+      const q2 = qLoad(); q2.shift(); qSave(q2);
+    }
+  } catch(e){
+    failed = true;
+    toast('아직 저장하지 못했어요. 다음에 앱을 열 때 다시 보낼게요');
+  } finally {
+    flushing = false;
+    if (!pendingSaves) $('#saving').classList.remove('show');
+    if (!failed) loadDay();
+  }
+}
+function cacheDay(){ if (!DEMO && S.day) lsSet('md_day_' + S.day.date, JSON.stringify(S.day)); }
+function tmpId(){ return 'tmp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2300); }
 
 /* ───── 시작 ───── */
@@ -495,8 +538,8 @@ async function boot(){
   try {
     const r = await call('init');
     S.settings = r.settings; S.lastSync = r.lastSync || '';
-    lsSet('md_settings', JSON.stringify(r.settings));
-    await loadDay();
+    if (!qLoad().length) lsSet('md_settings', JSON.stringify(r.settings)); else S.settings = JSON.parse(lsGet('md_settings') || 'null') || r.settings;
+    if (qLoad().length) flush(); else await loadDay();
   } catch(e){ fail(e); }
 }
 function pruneCache(){
@@ -532,6 +575,7 @@ async function loadDay(){
   if (!DEMO && (!S.day || S.day.date !== date)) {
     try { const c = JSON.parse(lsGet('md_day_' + date) || 'null'); if (c) { S.day = c; renderToday(); } } catch(e){}
   }
+  if (!DEMO && qLoad().length && S.day && S.day.date === date) { flush(); return; }   // 아직 보낼 게 남았으면 화면 그대로
   $('#todayBody').style.opacity = S.day && S.day.date === date ? 1 : .5;
   try {
     const d = await call('getDay', { date });
@@ -584,7 +628,12 @@ function openWaterSheet(){
       $('.water-adds').onclick = e => { const b = e.target.closest('[data-ml]'); if (!b) return; log.push(+b.dataset.ml); paint(); };
       $('#wUndo').onclick = () => { log.pop(); paint(); };
     },
-    async save(){ await call('saveWater', { date: S.date, log }); await loadDay(); }
+    save(){
+      const a = S.day.activity || (S.day.activity = { date: S.date });
+      a.water = String(total()); a.waterLog = log.join(',');
+      renderToday(); cacheDay();
+      send('saveWater', { date: S.date, log });
+    }
   });
 }
 const WK_PRESETS = ['걷기', '전신근력운동', '달리기', '요가', '필라테스', '자전거', '수영'];
@@ -800,16 +849,25 @@ function openMealSheet(meal){
         } catch(e){ fail(e); }
         finally { lb.disabled = false; }
       };
-      armDelete($('#mDelete'), async () => { await call('deleteMeal', { id: m.id }); await loadDay(); toast('삭제했어요'); });
+      armDelete($('#mDelete'), async () => {
+        S.day.meals = S.day.meals.filter(x => x.id !== m.id); renderToday(); cacheDay();
+        send('deleteMeal', { id: m.id });
+      });
     },
     async save(){
       const date = $('#mDate').value || S.date, time = $('#mTime').value || nowTime();
       const memo = $('#mMemo').value.trim();
       if (!items.length && !memo) { toast('사진이나 메모 중 하나는 남겨 주세요'); return false; }
-      const saved = await call('saveMeal', { id: m.id, date, time, tag: m.tag, memo, items });
-      photoIds(saved).forEach((id, i) => { if (items[i] && items[i].data) S.photos[id] = items[i].data; });
-      S.date = date;
-      await loadDay();
+      // 새 사진은 임시 이름으로 먼저 화면에 보여줘요
+      const localIds = items.map(it => { if (it.id) return it.id; const k = tmpId(); S.photos[k] = it.data; return k; });
+      const mealId = m.id || 'm' + tmpId();   // 새 식사도 휴대폰에서 이름표를 정해 보내서, 다시 보내도 겹치지 않아요
+      const local = { id: mealId, date, time, tag: m.tag, memo, photoId: localIds.join(',') };
+      if (date === S.date) {
+        S.day.meals = S.day.meals.filter(x => x.id !== local.id).concat(local).sort((a, b) => String(a.time).localeCompare(String(b.time)));
+        renderToday(); cacheDay();
+      }
+      send('saveMeal', { id: mealId, date, time, tag: m.tag, memo, items });
+      if (date !== S.date) { S.date = date; }
     }
   });
 }
@@ -842,9 +900,10 @@ function openStateSheet(){
         sel.add(v); $('#sNew').value = ''; $('#sAddRow').classList.add('hidden'); paint();
       };
     },
-    async save(){
-      await call('saveDayState', { date: S.date, time: nowTime(), labels: [...sel] });
-      await loadDay();
+    save(){
+      S.day.states = sel.size ? [{ id: tmpId(), date: S.date, time: nowTime(), labels: [...sel] }] : [];
+      renderToday(); cacheDay();
+      send('saveDayState', { date: S.date, time: nowTime(), labels: [...sel] });
     }
   };
   openSheet(ctx);
@@ -860,8 +919,10 @@ function openBodySheet(){
       <p class="hint">체중·체지방률·BMI는 건강 앱 동기화로 자동으로 들어와요. 골격근량과 허리 치수는 직접 입력해 주세요.</p>`,
     async save(){
       const g = id => { const v = $('#' + id).value.trim().replace(',', '.'); return v === '' || isNaN(+v) ? '' : String(+v); };
-      await call('saveBody', { date: S.date, weight: g('bW'), bodyFat: g('bF'), bmi: g('bB'), muscle: g('bM'), waist1: g('bW1'), waist2: g('bW2') });
-      await loadDay();
+      const p = { date: S.date, weight: g('bW'), bodyFat: g('bF'), bmi: g('bB'), muscle: g('bM'), waist1: g('bW1'), waist2: g('bW2') };
+      S.day.body = Object.assign({}, S.day.body || {}, p);
+      renderToday(); cacheDay();
+      send('saveBody', p);
     }
   });
 }
@@ -882,15 +943,22 @@ function openWorkoutSheet(w){
       ${isNew ? '' : '<button class="del-btn" id="wDelete">이 기록 삭제</button>'}`,
     mount(){
       $('.wk-pick').onclick = e => { const b = e.target.closest('[data-wk]'); if (b) $('#wName').value = b.dataset.wk; };
-      armDelete($('#wDelete'), async () => { await call('deleteWorkout', { id: w.id }); await loadDay(); });
+      armDelete($('#wDelete'), async () => {
+        S.day.workouts = S.day.workouts.filter(x => x.id !== w.id); renderToday(); cacheDay();
+        send('deleteWorkout', { id: w.id });
+      });
     },
     async save(){
       const name = $('#wName').value.trim();
       if (!name) { toast('운동 이름을 적거나 위에서 골라 주세요'); return false; }
-      await call('saveWorkout', { id: w && w.id, date: w ? w.date : S.date, time: $('#wTime').value || '', name,
+      const p = { id: w && w.id, date: w ? w.date : S.date, time: $('#wTime').value || '', name,
         minutes: parseInt($('#wMin').value, 10) || '', kcal: parseInt($('#wKcal').value, 10) || '',
-        source: !w ? 'manual' : (w.source === 'health' ? 'edited' : w.source) });
-      await loadDay();
+        source: !w ? 'manual' : (w.source === 'health' ? 'edited' : w.source) };
+      p.id = p.id || 'w' + tmpId();
+      const local = Object.assign({}, p);
+      S.day.workouts = S.day.workouts.filter(x => x.id !== local.id).concat(local).sort((a, b) => String(a.time).localeCompare(String(b.time)));
+      renderToday(); cacheDay();
+      send('saveWorkout', p);
     }
   });
 }
@@ -900,7 +968,10 @@ function openDiarySheet(){
   openSheet({
     title: '일기',
     html: `<textarea id="dText" rows="8" placeholder="오늘 하루는 어땠나요?">${esc(S.day ? S.day.diary : '')}</textarea>`,
-    async save(){ await call('saveDiary', { date: S.date, text: $('#dText').value.trim() }); await loadDay(); }
+    save(){
+      S.day.diary = $('#dText').value.trim(); renderToday(); cacheDay();
+      send('saveDiary', { date: S.date, text: S.day.diary });
+    }
   });
 }
 
@@ -967,7 +1038,11 @@ function chartSvg(data, days){
 }
 
 /* ───── 설정 ───── */
-async function saveSettings(){ S.settings = await call('saveSettings', { settings: S.settings }); if (!DEMO) lsSet('md_settings', JSON.stringify(S.settings)); if (S.tab === 'set') renderSet(); }
+async function saveSettings(){
+  if (!DEMO) lsSet('md_settings', JSON.stringify(S.settings));
+  if (S.tab === 'set') renderSet();
+  send('saveSettings', { settings: S.settings });
+}
 function renderSet(){
   const st = S.settings;
   const handle = '<span class="drag" aria-label="끌어서 순서 바꾸기">≡</span>';
