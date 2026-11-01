@@ -57,15 +57,12 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .m-val{font-size:15px;font-weight:600;white-space:nowrap;letter-spacing:-.3px}
 .m-val small{font-size:10px;color:var(--sub);margin-left:1px;font-weight:400;letter-spacing:0}
 .act-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
-.wk-list{margin-top:8px}
-.wk{display:flex;align-items:center;gap:14px;width:100%;padding:12px 0;border-bottom:1px solid var(--line)}
-.wk:last-child{border-bottom:0}
-.wk-ic{width:46px;height:46px;border-radius:50%;background:#FDEDE7;display:grid;place-items:center;font-size:22px;flex:none}
-.wk-main{flex:1;min-width:0}
-.wk-name{font-size:15px;color:#555;display:flex;align-items:center;gap:6px}
-.wk-kcal{font-size:22px;font-weight:800;letter-spacing:-.5px;margin:2px 0}
-.wk-sub{font-size:14px;color:var(--sub)}
+.wk-list{margin-top:6px}
+.wk{display:flex;align-items:center;gap:8px;width:100%;padding:7px 0;font-size:15px}
+.wk-name{color:#222}
+.wk-sub{color:var(--sub)}
 .wk-auto{font-size:11px;color:#c0613c;background:#FDEDE7;border-radius:6px;padding:2px 6px}
+.kcal-total{font-size:15px;color:#222;margin-right:4px}
 .wk-pick{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 10px}
 .steps{font-size:15px;margin-right:4px}
 .state-chips{width:100%;padding:2px 0}
@@ -352,7 +349,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-22';
+const APP_VERSION = '2026-11-01-23';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -662,9 +659,10 @@ function openWaterSheet(){
     }
   });
 }
-const WK_PRESETS = ['걷기', '전신근력운동', '달리기', '요가', '필라테스', '자전거', '수영'];
+const WK_PRESETS = ['전신근력운동', '걷기', '스텝퍼'];
 function workoutIcon(name){
   const n = String(name);
+  if (/스텝/.test(n)) return '🪜';
   if (/걷|산책/.test(n)) return '🚶';
   if (/달리|러닝|조깅/.test(n)) return '🏃';
   if (/근력|웨이트|헬스/.test(n)) return '🏋️';
@@ -675,18 +673,15 @@ function workoutIcon(name){
   return '💪';
 }
 function workoutText(w){
-  return [has(w.minutes) ? w.minutes + '분' : '', has(w.kcal) ? w.kcal + 'kcal' : '', w.time ? korTime(w.time) : ''].filter(Boolean).join(' · ');
+  return [has(w.minutes) ? w.minutes + '분' : '', has(w.kcal) ? w.kcal + 'kcal' : ''].filter(Boolean).join(' · ');
 }
 // 운동 기록 한 줄: 아이콘 · 이름 · kcal · 시간 · 시각
 function workoutRow(w){
   const auto = w.source === 'health';
+  // 걸음 줄과 같은 크기로 한 줄: 🚶 걷기  35분 · 167kcal
   return `<button class="wk" data-act="workout-edit" data-id="${w.id}">
-    <span class="wk-ic">${workoutIcon(w.name)}</span>
-    <span class="wk-main">
-      <span class="wk-name">${esc(w.name)}${auto ? '<span class="wk-auto">건강 앱 · 눌러서 자세히</span>' : ''}</span>
-      ${has(w.kcal) ? `<span class="wk-kcal" style="display:block">${w.kcal}kcal</span>` : ''}
-      <span class="wk-sub" style="display:block">${[has(w.minutes) ? w.minutes + '분' : '', w.time ? korTime(w.time) : ''].filter(Boolean).join(' · ')}</span>
-    </span></button>`;
+    <span>${workoutIcon(w.name)}</span><span class="wk-name">${esc(w.name)}</span>
+    <span class="wk-sub mono">${workoutText(w)}</span>${auto ? '<span class="wk-auto">눌러서 자세히</span>' : ''}</button>`;
 }
 function toiletIcon(l){ return String(l).replace(/💩/g, '').trim() || '💩'; }
 function isToilet(l){ return String(l).indexOf('💩') >= 0; }
@@ -719,7 +714,8 @@ function renderToday(){
   h += `<section class="sec"><div class="sec-head"><span>신체 · 운동</span><span class="sync-mini">${S.lastSync ? fmtSync(S.lastSync) : ''}<a class="sync-btn" target="_top" href="shortcuts://run-shortcut?name=${encodeURIComponent(sc)}">↻ 동기화</a></span></div>`;
   h += `<button class="metrics" data-act="body">${cell('체중', b.weight, 'kg')}${cell('체지방', b.bodyFat, '%')}${cell('BMI', b.bmi, '')}${cell('골격근', b.muscle, 'kg')}${cell('허리1', b.waist1, 'cm')}${cell('허리2', b.waist2, 'cm')}</button>`;
   const steps = d.activity && has(d.activity.steps) ? Number(d.activity.steps).toLocaleString('ko-KR') + '걸음' : '—';
-  h += `<div class="act-line"><span class="steps mono">👟 ${steps}</span><button class="chip sm add" data-act="workout-new">＋ 운동</button></div>`;
+  const kcalSum = d.workouts.reduce((a, w) => a + (+w.kcal || 0), 0);
+  h += `<div class="act-line"><span class="steps mono">👟 ${steps}</span>${kcalSum ? `<span class="kcal-total mono">🔥 ${kcalSum.toLocaleString('ko-KR')}kcal</span>` : ''}<button class="chip sm add" data-act="workout-new">＋ 운동</button></div>`;
   if (d.workouts.length) h += `<div class="wk-list">${d.workouts.map(workoutRow).join('')}</div>`;
   h += `</section>`;
 
@@ -965,7 +961,6 @@ function openWorkoutSheet(w){
         <div class="field"><span>운동</span><input id="wName" class="plain" placeholder="예: 걷기" value="${esc(w && !(auto && w.name === '운동') ? w.name : '')}"></div>
         <div class="field"><span>시간</span><div class="num"><input id="wMin" type="text" inputmode="numeric" value="${w && has(w.minutes) ? w.minutes : ''}" placeholder="0"><em>분</em></div></div>
         <div class="field"><span>칼로리</span><div class="num"><input id="wKcal" type="text" inputmode="numeric" value="${w && has(w.kcal) ? w.kcal : ''}" placeholder="0"><em>kcal</em></div></div>
-        <div class="field"><span>시작 시각</span><input type="time" id="wTime" value="${(w && w.time) || nowTime()}"></div>
       </div>
       ${w && w.source === 'health' ? '<p class="hint">건강 앱에서 자동으로 가져온 기록이에요. 이름이나 시간을 고쳐 저장하면, 그날은 더 이상 자동으로 덮어쓰지 않아요.</p>' : ''}
       ${isNew ? '' : '<button class="del-btn" id="wDelete">이 기록 삭제</button>'}`,
@@ -979,7 +974,7 @@ function openWorkoutSheet(w){
     async save(){
       const name = $('#wName').value.trim();
       if (!name) { toast('운동 이름을 적거나 위에서 골라 주세요'); return false; }
-      const p = { id: w && w.id, date: w ? w.date : S.date, time: $('#wTime').value || '', name,
+      const p = { id: w && w.id, date: w ? w.date : S.date, time: '', name,
         minutes: parseInt($('#wMin').value, 10) || '', kcal: parseInt($('#wKcal').value, 10) || '',
         source: !w ? 'manual' : (w.source === 'health' ? 'edited' : w.source) };
       p.id = p.id || 'w' + tmpId();
@@ -1257,6 +1252,8 @@ async function drawExport(){
     const act = [];
     if (d.activity && has(d.activity.steps)) act.push(`${Number(d.activity.steps).toLocaleString('ko-KR')}걸음`);
     d.workouts.forEach(w => act.push(w.name + (workoutText(w) ? ' ' + workoutText(w) : '')));
+    const kcalSum = d.workouts.reduce((x, w) => x + (+w.kcal || 0), 0);
+    if (kcalSum) act.push(`합계 ${kcalSum.toLocaleString('ko-KR')}kcal`);
     if (act.length) info.push(['운동', act.join('  ·  ')]);
   }
 
