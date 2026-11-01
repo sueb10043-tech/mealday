@@ -113,7 +113,7 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .diary-text{display:block;width:100%;white-space:pre-wrap;line-height:1.6;color:#333;padding:6px 0}
 
 .tabbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));display:flex;gap:4px;padding:6px;background:rgba(250,250,250,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.04);z-index:20}
-.tabbar button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 26px;border-radius:999px;font-size:12px;color:#555}
+.tabbar button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 22px;border-radius:999px;font-size:12px;color:#555}
 .tabbar button.on{background:#e9e9e9;color:#111;font-weight:600}
 
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:40}
@@ -183,7 +183,16 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .cell{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;border-radius:14px;min-height:66px}
 .cell .dn{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;font-size:16px;color:#111;font-weight:500}
 .cell.today .dn{background:#111;color:#fff;font-weight:700}
-.cell.future .dn{color:#777}
+.cell.sun .dn{color:#E5484D}
+.cell.sat .dn{color:#2F6FE0}
+.cell.today .dn{color:#fff}
+.cell.future .dn{opacity:.55}
+.wd.sun{color:#E5484D}.wd.sat{color:#2F6FE0}
+.cdots{display:flex;gap:3px;height:7px;align-items:center}
+.cdots i{width:7px;height:7px;border-radius:50%;display:block}
+.cd-good{background:#9A6B3F}.cd-bad{background:#E5484D}.cd-ex{background:#2FA36B}
+.cal-legend{display:flex;justify-content:center;gap:14px;color:var(--sub);font-size:12px;margin:10px 0 0}
+.cal-legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:1px}
 .dots{display:flex;gap:3px;height:6px}
 .dot{width:6px;height:6px;border-radius:50%;background:#111}
 .dot.t{background:var(--brown)}
@@ -287,6 +296,7 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
   <div id="todayBody"><p class="empty">불러오는 중…</p></div>
 </main>
 <main id="view-cal" class="view hidden"></main>
+<main id="view-chg" class="view hidden"></main>
 <main id="view-set" class="view hidden"></main>
 
 
@@ -298,6 +308,10 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
   <button data-tab="cal">
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
     <span>기록</span>
+  </button>
+  <button data-tab="chg">
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17.5l5.5-6 4 3.5 7-8"/><path d="M15 7h5v5"/></svg>
+    <span>변화</span>
   </button>
 </nav>
 
@@ -367,7 +381,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-31';
+const APP_VERSION = '2026-11-01-35';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -526,7 +540,8 @@ async function flush(){
     while (true) {
       const q = qLoad(); if (!q.length) break;
       try {
-        await call(q[0].action, q[0].payload);
+        const res = await call(q[0].action, q[0].payload);
+        if (q[0].action === 'saveMeal') keepSentPhotos(q[0].payload, res);
         const q2 = qLoad(); q2.shift(); qSave(q2);
       } catch(e){
         // 같은 항목이 3번 실패하면 목록에서 빼고 이유를 알려줘요 (계속 막혀 있지 않도록)
@@ -544,6 +559,18 @@ async function flush(){
     if (!pendingSaves) $('#saving').classList.remove('show');
     loadDay(true);   // 보낸 뒤에는 늘 서버의 최신 기록을 받아와요
   }
+}
+// 내가 올린 사진은 서버가 붙인 진짜 이름으로 휴대폰에 저장 → 다음에 열 때 드라이브에서 다시 받지 않아요
+function keepSentPhotos(payload, meal){
+  try {
+    const items = payload.items || [], ids = photoIds(meal);
+    if (items.length !== ids.length) return;
+    const map = {};
+    items.forEach((it, i) => { if (it.data) map[ids[i]] = it.data; });
+    if (!Object.keys(map).length) return;
+    Object.assign(S.photos, map);
+    if (!DEMO) idbPutMany(map);
+  } catch(e){}
 }
 function cacheDay(){ if (!DEMO && S.day) lsSet('md_day_' + S.day.date, JSON.stringify(S.day)); }
 function tmpId(){ return 'tmp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -566,7 +593,7 @@ async function boot(){
     try {
       const st = JSON.parse(lsGet('md_settings') || 'null');
       const day = JSON.parse(lsGet('md_day_' + S.date) || 'null');
-      if (st) { S.settings = st; if (day) { S.day = day; renderToday(); } }
+      if (st) { S.settings = st; if (day) { S.day = day; renderToday(); loadPhotos(day.meals); } }   // 사진도 서버를 기다리지 않고 휴대폰 저장본으로 바로
     } catch(e){}
   }
   try {
@@ -695,9 +722,14 @@ async function idbPutMany(map){
 }
 
 function photoIds(m){ return String((m && m.photoId) || '').split(',').filter(Boolean); }
+const photoBusy = new Set();   // 이미 불러오는 중인 사진은 또 요청하지 않아요
 async function loadPhotos(meals){
-  let need = [...new Set(meals.flatMap(photoIds).filter(id => !S.photos[id] && !/^tmp/.test(id)))];
+  let need = [...new Set(meals.flatMap(photoIds).filter(id => !S.photos[id] && !/^tmp/.test(id) && !photoBusy.has(id)))];
   if (!need.length) return;
+  need.forEach(id => photoBusy.add(id));
+  try { await loadPhotos_(need); } finally { need.forEach(id => photoBusy.delete(id)); }
+}
+async function loadPhotos_(need){
   let cached = {};
   if (!DEMO) { try { cached = await Promise.race([idbGetMany(need), new Promise(r => setTimeout(() => r({}), 2000))]); } catch(e){ cached = {}; } }
   if (Object.keys(cached).length) { Object.assign(S.photos, cached); applyPhotos(); }
@@ -913,7 +945,7 @@ function openPhotoEditor(src){
       const el = document.createElement('div'); el.className = 'pe';
       el.innerHTML = `<div class="pe-top"><button data-a="cancel">취소</button><button class="ok" data-a="ok">완료</button></div>
         <div class="pe-stage"><div class="pe-wrap"><canvas></canvas><div class="pe-box"><i class="pe-h tl" data-h="tl"></i><i class="pe-h tr" data-h="tr"></i><i class="pe-h bl" data-h="bl"></i><i class="pe-h br" data-h="br"></i></div></div></div>
-        <div class="pe-bot"><button data-a="rot">↻ 회전</button><button data-a="reset">원래대로</button></div>`;
+        <div class="pe-bot"><button data-a="rot">↺ 회전</button><button data-a="reset">원래대로</button></div>`;
       document.body.appendChild(el);
       const stage = el.querySelector('.pe-stage'), wrap = el.querySelector('.pe-wrap'), cv = el.querySelector('canvas'), box = el.querySelector('.pe-box');
       let rot = 0, crop = { x: 0, y: 0, w: 1, h: 1 }, W = 0, H = 0;   // crop: 돌린 사진 기준 0~1
@@ -968,7 +1000,8 @@ function openPhotoEditor(src){
       el.querySelector('.pe-top').onclick = el.querySelector('.pe-bot').onclick = e => {
         const a = (e.target.closest('[data-a]') || {}).dataset; if (!a || !a.a) return;
         if (a.a === 'cancel') close(null);
-        else if (a.a === 'rot') { rot = (rot + 1) % 4; crop = { x: 0, y: 0, w: 1, h: 1 }; layout(); }
+        else if (a.a === 'rot') { rot = (rot + 3) % 4;   // 왼쪽(반시계)으로 90°
+ crop = { x: 0, y: 0, w: 1, h: 1 }; layout(); }
         else if (a.a === 'reset') { rot = 0; crop = { x: 0, y: 0, w: 1, h: 1 }; layout(); }
         else if (a.a === 'ok') {
           const full = crop.x < 0.005 && crop.y < 0.005 && crop.w > 0.99 && crop.h > 0.99;
@@ -1200,8 +1233,8 @@ async function fetchMonth(ym){
 }
 async function loadMonth(){
   const ym = S.ym;
-  renderCal(monthCache(ym));
-  try { const r = await fetchMonth(ym); if (ym === S.ym && S.tab === 'cal') renderCal(r); } catch(e){ fail(e); }
+  renderMonthTab(monthCache(ym));
+  try { const r = await fetchMonth(ym); if (ym === S.ym && (S.tab === 'cal' || S.tab === 'chg')) renderMonthTab(r); } catch(e){ fail(e); }
   // 앞뒤 달도 미리 받아둬서 넘길 때 바로 보이게
   const p = ym.split('-').map(Number);
   [-1, 1].forEach(k => { const d = new Date(p[0], p[1] - 1 + k, 1); const y2 = d.getFullYear() + '-' + pad(d.getMonth() + 1);
@@ -1218,17 +1251,30 @@ function renderCal(data){
   for (let i = 0; i < offset; i++) cells += '<div></div>';
   for (let d = 1; d <= days; d++) {
     const ds = `${y}-${pad(m)}-${pad(d)}`, info = (data && data[ds]) || {};
-    const icons = (info.toilet || []).map(esc).join('') + ((info.workouts || []).length ? '🏃' : '');
-    cells += `<button class="cell${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}" data-date="${ds}"><span class="dn">${d}</span><span class="icons">${icons}</span>${has(info.weight) ? `<span class="w mono">${(+info.weight).toFixed(1)}</span>` : ''}</button>`;
+    // 색 점: 갈색 = 배변 좋음(👍), 빨강 = 배변 나쁨(👎), 초록 = 운동
+    const tl = info.toilet || [];
+    const dots = (tl.some(t => t !== '👎') ? '<i class="cd-good"></i>' : '') + (tl.indexOf('👎') >= 0 ? '<i class="cd-bad"></i>' : '')
+      + ((info.workouts || []).length ? '<i class="cd-ex"></i>' : '');
+    const wd = new Date(y, m - 1, d).getDay();
+    cells += `<button class="cell${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-date="${ds}"><span class="dn">${d}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="w mono">${(+info.weight).toFixed(1)}</span>` : ''}</button>`;
   }
   $('#view-cal').innerHTML = `
     <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월</span><button data-act="mnext">›</button></div>
-    <div class="cal">${wds.map(w => `<div class="wd">${w}</div>`).join('')}${cells}</div>
-    <div class="set-label">이번 달 변화</div>
-    <div class="chart">${data ? chartSvg(data, days) : '<p class="empty" style="text-align:center">불러오는 중…</p>'}</div>
+    <div class="cal">${wds.map(w => `<div class="wd${w === '일' ? ' sun' : w === '토' ? ' sat' : ''}">${w}</div>`).join('')}${cells}</div>
+    <div class="cal-legend"><span><i class="cd-good"></i>배변 좋음</span><span><i class="cd-bad"></i>배변 나쁨</span><span><i class="cd-ex"></i>운동</span></div>
     <div class="set-label">이번 달 운동</div>
     <div class="chart">${data ? workoutSummary(data) : '<p class="empty" style="text-align:center">불러오는 중…</p>'}</div>`;
 }
+/* ───── 변화 탭 ───── */
+function renderChg(data){
+  const p = S.ym.split('-').map(Number), y = p[0], m = p[1];
+  const days = new Date(y, m, 0).getDate();
+  $('#view-chg').innerHTML = `
+    <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월</span><button data-act="mnext">›</button></div>
+    <div class="set-label">이번 달 변화</div>
+    <div class="chart">${data ? chartSvg(data, days) : '<p class="empty" style="text-align:center">불러오는 중…</p>'}</div>`;
+}
+function renderMonthTab(data){ if (S.tab === 'chg') renderChg(data); else renderCal(data); }
 function fmtMin(m){ const h = Math.floor(m / 60), r = m % 60; return h ? `${h}시간${r ? ' ' + r + '분' : ''}` : `${r}분`; }
 function workoutSummary(data){
   const by = {}; let days = 0, mins = 0;
@@ -1588,12 +1634,12 @@ async function shareExport(){
 /* ───── 화면 전환 / 이벤트 ───── */
 function setTab(tab){
   S.tab = tab;
-  ['today', 'cal', 'set'].forEach(t => $('#view-' + t).classList.toggle('hidden', t !== tab));
+  ['today', 'cal', 'chg', 'set'].forEach(t => $('#view-' + t).classList.toggle('hidden', t !== tab));
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   window.scrollTo(0, 0);
   if (!S.settings) return;
   if (tab === 'today') loadDay();
-  if (tab === 'cal') { S.ym = S.date.slice(0, 7); loadMonth(); }
+  if (tab === 'cal' || tab === 'chg') { S.ym = S.date.slice(0, 7); loadMonth(); }
   if (tab === 'set') renderSet();
 }
 
@@ -1625,6 +1671,14 @@ function bind(){
   $('#view-cal').addEventListener('click', e => {
     const cell = e.target.closest('[data-date]');
     if (cell) { S.date = cell.dataset.date; setTab('today'); return; }
+    const el = e.target.closest('[data-act]'); if (!el) return;
+    const p = S.ym.split('-').map(Number);
+    const nd = new Date(p[0], p[1] - 1 + (el.dataset.act === 'mnext' ? 1 : -1), 1);
+    S.ym = nd.getFullYear() + '-' + pad(nd.getMonth() + 1);
+    loadMonth();
+  });
+
+  $('#view-chg').addEventListener('click', e => {
     const el = e.target.closest('[data-act]'); if (!el) return;
     const p = S.ym.split('-').map(Number);
     const nd = new Date(p[0], p[1] - 1 + (el.dataset.act === 'mnext' ? 1 : -1), 1);
