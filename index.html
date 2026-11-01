@@ -347,6 +347,8 @@ const S = {
  * (공개 저장소에 주소를 적으면 누구나 코드를 보고 내 기록에 접근할 수 있어요.)
  */
 const EXEC_URL = '';
+/* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
+const APP_VERSION = '2026-11-01-19';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -526,6 +528,7 @@ async function boot(){
     document.body.prepend(tag);
     $('#connectBtn').onclick = openConnectSheet;
   }
+  checkUpdate();
   // 지난번 내용을 먼저 바로 보여주고, 그 사이 서버에서 새로 받아와요
   if (!DEMO) {
     pruneCache();
@@ -541,6 +544,18 @@ async function boot(){
     if (!qLoad().length) lsSet('md_settings', JSON.stringify(r.settings)); else S.settings = JSON.parse(lsGet('md_settings') || 'null') || r.settings;
     if (qLoad().length) flush(); else await loadDay();
   } catch(e){ fail(e); }
+}
+/* GitHub에 새 버전이 올라왔는지 확인해서, 바뀌었으면 새 화면으로 다시 열기 */
+async function checkUpdate(){
+  if (IN_GAS || location.protocol === 'file:') return;
+  try {
+    const res = await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' });
+    const html = await res.text();
+    const m = html.match(/const APP_VERSION = '([^']+)'/);
+    if (m && m[1] !== APP_VERSION && !qLoad().length && !sheetCtx) {
+      location.replace(location.pathname + '?v=' + encodeURIComponent(m[1]));
+    }
+  } catch(e){}
 }
 function pruneCache(){
   try {
@@ -1440,6 +1455,7 @@ function bind(){
   $('#exShare').onclick = shareExport;
   $('#exOpts').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; S.exOpt[b.dataset.k] = !S.exOpt[b.dataset.k]; paintExOpts(); drawExport(); };
 
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && S.settings && S.tab === 'today' && !sheetCtx) loadDay();
   });
