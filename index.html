@@ -222,17 +222,13 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .toast.show{opacity:1;transform:translateX(-50%)}
 
 .file-in{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
-.meal-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;background:#fff;border-radius:20px;padding:10px 10px 10px 12px;margin:4px 0 10px}
-.tag-sel{display:flex;flex-wrap:wrap;gap:4px;align-items:center;text-align:left;flex:1 1 auto}
-.meal-head .dt{flex:0 0 auto;margin-left:auto}
-.meal-head .dt input[type=date]{width:138px}
-.meal-head .dt input[type=time]{width:104px}
+.meal-head{display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:8px;background:#fff;border-radius:20px;padding:10px 10px 10px 12px;margin:4px 0 10px}
+.tag-sel{display:flex;flex-wrap:nowrap;gap:4px;align-items:center;text-align:left;flex:0 1 auto;min-width:0;overflow:hidden}
+.meal-head input[type=time]{border:0;background:#ececec;border-radius:10px;-webkit-appearance:none;appearance:none;flex:1 1 104px;width:104px;max-width:104px;min-width:62px;margin-left:auto;font-size:15px;padding:6px 6px;min-height:34px}
 .tag-pick .tag-pill{opacity:.4}
 .tag-pick .tag-pill.on{opacity:1;box-shadow:0 0 0 2px #111 inset}
 .meal-top{flex-wrap:wrap}
-.meal-head .dt{gap:6px}
-.meal-head .dt input{font-size:15px;padding:6px 8px;min-height:34px}
-.meal-head .tag-pill{padding:7px 12px;font-size:15px;flex:none}
+.meal-head .tag-pill{padding:7px 10px;font-size:15px;flex:none;white-space:nowrap}
 .tag-pick{display:flex;flex-wrap:wrap;gap:8px;margin:-2px 0 10px}
 .photos-edit{background:#fff;border-radius:20px;padding:10px}
 .ph-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -354,7 +350,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-29';
+const APP_VERSION = '2026-11-01-30';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -902,7 +898,7 @@ function openMealSheet(meal){
   openSheet({
     title: '식사 입력',
     html: `
-      <div class="meal-head"><button class="tag-sel" id="mTag"></button><div class="dt"><input type="date" id="mDate" value="${m.date}"><input type="time" id="mTime" value="${m.time}"></div></div>
+      <div class="meal-head"><button class="tag-sel" id="mTag"></button><input type="time" id="mTime" value="${m.time}"></div>
       <div class="tag-pick hidden" id="mTagPick">${tags.map(t => `<button class="tag-pill" data-tag="${t.id}" style="background:${t.color}">${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
       <div class="photos-edit" id="mPhotos"></div>
       <textarea id="mMemo" rows="3" placeholder="무엇을 먹었나요? 메모를 남겨보세요.">${esc(m.memo)}</textarea>
@@ -913,7 +909,9 @@ function openMealSheet(meal){
       const paintTag = () => {
         m.tag = sel.join(',');
         const ts = tagsOf(m.tag);
-        $('#mTag').innerHTML = ts.length ? ts.map(pill).join('') : '<span class="tag-pill none">태그 선택</span>';
+        $('#mTag').innerHTML = !ts.length ? '<span class="tag-pill none">태그 선택</span>'
+          : ts.length >= 3 ? ts.map(t => `<span class="tag-pill" style="background:${t.color}" title="${esc(t.name)}">${esc(t.emoji)}</span>`).join('')
+          : ts.map(pill).join('');
         document.querySelectorAll('#mTagPick [data-tag]').forEach(b => b.classList.toggle('on', sel.indexOf(b.dataset.tag) >= 0));
       };
       paintTag();
@@ -952,7 +950,7 @@ function openMealSheet(meal){
         if (!(S.settings.school && S.settings.school.code)) { toast('설정 → 학교 급식에서 학교를 먼저 골라 주세요'); return; }
         lb.disabled = true;
         try {
-          const r = await call('getLunch', { date: $('#mDate').value || S.date });
+          const r = await call('getLunch', { date: m.date || S.date });
           if (!r.dishes.length) { toast('그날 급식 정보가 없어요'); return; }
           const line = r.dishes.join('\n');   // 메뉴만 한 줄에 하나씩
           const ta = $('#mMemo');
@@ -968,7 +966,7 @@ function openMealSheet(meal){
       });
     },
     async save(){
-      const date = $('#mDate').value || S.date, time = $('#mTime').value || nowTime();
+      const date = m.date || S.date, time = $('#mTime').value || nowTime();
       const memo = $('#mMemo').value.trim();
       if (!items.length && !memo) { toast('사진이나 메모 중 하나는 남겨 주세요'); return false; }
       // 새 사진은 임시 이름으로 먼저 화면에 보여줘요
@@ -1119,7 +1117,6 @@ function renderCal(data){
     cells += `<button class="cell${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}" data-date="${ds}"><span class="dn">${d}</span><span class="icons">${icons}</span>${has(info.weight) ? `<span class="w mono">${(+info.weight).toFixed(1)}</span>` : ''}</button>`;
   }
   $('#view-cal').innerHTML = `
-    <h1 class="big">기록</h1>
     <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월</span><button data-act="mnext">›</button></div>
     <div class="cal">${wds.map(w => `<div class="wd">${w}</div>`).join('')}${cells}</div>
     <div class="set-label">이번 달 변화</div>
@@ -1135,9 +1132,7 @@ function workoutSummary(data){
     ws.forEach(w => { const m = +w.minutes || 0; mins += m; const o = by[w.name] = by[w.name] || { n: 0, m: 0 }; o.n++; o.m += m; });
   });
   if (!days) return '<p class="empty" style="text-align:center">이번 달 운동 기록이 아직 없어요.</p>';
-  const rows = Object.keys(by).sort((a, b) => by[b].m - by[a].m)
-    .map(k => `<div class="ws-row"><b>${esc(k)}</b><span>${by[k].n}회 · ${fmtMin(by[k].m)}</span></div>`).join('');
-  return `<div class="ws-top">🏃 <b>${days}일</b> 운동했어요 · 총 <b>${fmtMin(mins)}</b></div>${rows}`;
+  return `<div class="ws-top" style="text-align:center;padding:6px 8px">🏃 이번 달 <b>${days}일</b> 운동했어요</div>`;
 }
 function chartSvg(data, days){
   const keys = Object.keys(data).sort();
@@ -1322,7 +1317,8 @@ async function openExport(){
 
 const EX_ITEMS = [['state', '오늘의 상태'], ['body', '신체'], ['act', '운동'], ['meal', '식사'], ['diary', '오늘의 일기']];
 function paintExOpts(){
-  $('#exOpts').innerHTML = EX_ITEMS.map(([k, n]) => `<button class="ex-opt${S.exOpt[k] ? ' on' : ''}" data-k="${k}">${S.exOpt[k] ? '✓ ' : ''}${n}</button>`).join('');
+  const all = EX_ITEMS.every(([k]) => S.exOpt[k]);
+  $('#exOpts').innerHTML = `<button class="ex-opt${all ? ' on' : ''}" data-k="all">${all ? '✓ ' : ''}전체</button>` + EX_ITEMS.map(([k, n]) => `<button class="ex-opt${S.exOpt[k] ? ' on' : ''}" data-k="${k}">${S.exOpt[k] ? '✓ ' : ''}${n}</button>`).join('');
 }
 async function drawExport(){
   const d = S.day, W = 1080, P = 64, F = '"Pretendard", -apple-system, "Apple SD Gothic Neo", sans-serif';
@@ -1571,7 +1567,7 @@ function bind(){
 
   $('#exClose').onclick = () => $('#ex').classList.add('hidden');
   $('#exShare').onclick = shareExport;
-  $('#exOpts').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; S.exOpt[b.dataset.k] = !S.exOpt[b.dataset.k]; paintExOpts(); drawExport(); };
+  $('#exOpts').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; const k = b.dataset.k; if (k === 'all') EX_ITEMS.forEach(([x]) => S.exOpt[x] = true); else S.exOpt[k] = !S.exOpt[k]; paintExOpts(); drawExport(); };
 
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
   document.addEventListener('visibilitychange', () => {
