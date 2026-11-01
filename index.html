@@ -277,12 +277,17 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .fav-panel{margin:8px 12px 0;padding:10px;border-radius:14px;background:#F6F5F2}
 .fav-list{display:flex;flex-wrap:wrap;gap:6px}
 .fav-chip{padding:7px 12px;border-radius:999px;background:#fff;border:1px solid #e3e1db;font-size:14px;color:#222;text-align:left;max-width:100%;white-space:normal;word-break:break-all}
-.fav-chip .x{color:#E5484D;margin-left:6px;font-weight:700}
+.fav-chip.edit{border-style:dashed}
+.fav-chip .pen{color:var(--sub);font-size:12px}
+.fav-actions{display:flex;align-items:center;gap:6px}
+.fav-actions button{height:34px;padding:0 14px;border-radius:10px;font-size:14px;font-weight:600}
+.fav-main{background:#111;color:#fff}
+.fav-sub{background:#e6e4de;color:#333}
+.fav-del{background:transparent;color:#E5484D;padding:0 4px!important}
+.fav-form label{display:block;font-size:12px;color:var(--sub);font-weight:600;margin:2px 2px 4px}
+.fav-form input,.fav-form textarea{width:100%;border:0;border-radius:10px;background:#fff;padding:9px 10px;font-size:15px;margin:0 0 10px;min-height:0;line-height:1.4;display:block}
 .fav-empty{font-size:13px;color:var(--sub);margin:2px 2px 0}
-.fav-add{display:flex;gap:6px;margin-top:10px}
-.fav-add input{flex:1;min-width:0;border:0;border-radius:10px;background:#fff;padding:8px 10px;font-size:15px}
-.fav-add button{padding:0 12px;border-radius:10px;background:#111;color:#fff;font-size:14px;font-weight:600}
-.fav-add .fav-edit{background:#e6e4de;color:#333}
+
 .lunch-btn{height:32px;padding:0 12px;border-radius:999px;background:#FBE8D0;font-size:14px;font-weight:600;color:#333;display:flex;align-items:center;gap:4px;flex:none}
 .lunch-btn:disabled{opacity:.5}
 .ph .ed{position:absolute;left:5px;bottom:5px;height:24px;padding:0 8px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;display:flex;align-items:center;pointer-events:none}
@@ -417,7 +422,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-02-46';
+const APP_VERSION = '2026-11-02-47';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1093,7 +1098,7 @@ function openMealSheet(meal){
       <div class="meal-head"><button class="tag-sel" id="mTag"></button><input type="time" id="mTime" value="${m.time}"></div>
       <div class="tag-pick hidden" id="mTagPick">${tags.map(t => `<button class="tag-pill" data-tag="${t.id}" style="background:${t.color}">${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
       <div class="photos-edit" id="mPhotos"></div>
-      <div class="memo-box"><div class="memo-top"><span>메모</span><div class="memo-btns"><button class="fav-btn" id="mFav">⭐ 자주 먹는</button>${S.settings.school && S.settings.school.code ? '<button class="lunch-btn" id="mLunch">🍱 급식 불러오기</button>' : ''}</div></div>
+      <div class="memo-box"><div class="memo-top"><span>메모</span><div class="memo-btns"><button class="fav-btn" id="mFav">⭐ 즐겨찾기</button>${S.settings.school && S.settings.school.code ? '<button class="lunch-btn" id="mLunch">🍱 급식 불러오기</button>' : ''}</div></div>
         <div class="fav-panel hidden" id="mFavPanel"></div>
         <textarea id="mMemo" rows="3" placeholder="무엇을 먹었나요? 메모를 남겨보세요.">${esc(m.memo)}</textarea></div>
       ${isNew ? '' : '<button class="del-btn" id="mDelete">이 기록 삭제</button>'}`,
@@ -1144,35 +1149,63 @@ function openMealSheet(meal){
         }
       };
       if ($('#mLunch')) $('#mLunch').onclick = e => loadLunch(e.currentTarget);
-      // ⭐ 자주 먹는 음식: 등록해 둔 메모를 누르면 바로 메모 칸에 들어가요
-      let favEdit = false;
-      const favs = () => (S.settings.favs = S.settings.favs || []);
+      // ⭐ 즐겨찾기: 이름(예: 오나오)을 누르면 등록해 둔 상세 내용(예: 오트밀 3숟…)이 메모에 들어가요
+      // favMode: 'list' = 이름 목록, 'edit' = 이름을 누르면 수정, 'form' = 추가/수정 입력창
+      let favMode = 'list', favIdx = -1;
+      const favs = () => {
+        // 예전 형식(이름만 저장)도 { name, text } 로 바꿔서 써요
+        S.settings.favs = (S.settings.favs || []).map(f => typeof f === 'string' ? { name: f, text: f } : f);
+        return S.settings.favs;
+      };
       const paintFav = () => {
-        const list = favs();
-        $('#mFavPanel').innerHTML = `
-          ${list.length ? `<div class="fav-list">${list.map((f, i) => `<button class="fav-chip" data-fav="${i}">${esc(f)}${favEdit ? '<span class="x">✕</span>' : ''}</button>`).join('')}</div>`
-            : '<p class="fav-empty">아직 등록한 음식이 없어요. 아래에 적고 등록을 눌러 주세요.</p>'}
-          <div class="fav-add"><input id="mFavIn" placeholder="예: 우유, 그릭요거트" maxlength="60"><button id="mFavOk">등록</button>${list.length ? `<button class="fav-edit" id="mFavEd">${favEdit ? '완료' : '삭제'}</button>` : ''}</div>`;
+        const list = favs(), pn = $('#mFavPanel');
+        if (favMode === 'form') {
+          const f = favIdx >= 0 ? list[favIdx] : { name: '', text: '' };
+          pn.innerHTML = `
+            <div class="fav-form">
+              <label>이름</label><input id="mFavName" maxlength="20" placeholder="예: 오나오" value="${esc(f.name)}">
+              <label>메모에 들어갈 내용</label><textarea id="mFavText" rows="3" placeholder="예: 오트밀 3숟, 그릭요거트, 바나나 반 개">${esc(f.text)}</textarea>
+              <div class="fav-actions">${favIdx >= 0 ? '<button class="fav-del" data-fa="del">삭제</button>' : ''}<span style="flex:1"></span><button class="fav-sub" data-fa="cancel">취소</button><button class="fav-main" data-fa="save">저장</button></div>
+            </div>`;
+          setTimeout(() => { const n = $('#mFavName'); if (n && !n.value) n.focus(); }, 30);
+          return;
+        }
+        const edit = favMode === 'edit';
+        pn.innerHTML = `
+          ${list.length ? `<div class="fav-list">${list.map((f, i) => `<button class="fav-chip${edit ? ' edit' : ''}" data-fav="${i}">${esc(f.name)}${edit ? ' <span class="pen">✎</span>' : ''}</button>`).join('')}</div>`
+            : '<p class="fav-empty">아직 즐겨찾기가 없어요. ＋ 추가를 눌러 등록해 주세요.</p>'}
+          ${edit ? '<p class="fav-empty" style="margin-top:8px">고칠 즐겨찾기를 눌러 주세요.</p>' : ''}
+          <div class="fav-actions" style="margin-top:10px"><span style="flex:1"></span>${list.length ? `<button class="fav-sub" data-fa="edit">${edit ? '완료' : '편집'}</button>` : ''}<button class="fav-main" data-fa="add">＋ 추가</button></div>`;
       };
       $('#mFav').onclick = () => {
         const pn = $('#mFavPanel'), open = pn.classList.toggle('hidden') === false;
         $('#mFav').classList.toggle('on', open);
-        if (open) { favEdit = false; paintFav(); }
+        if (open) { favMode = 'list'; paintFav(); }
       };
       $('#mFavPanel').onclick = e => {
-        if (e.target.closest('#mFavOk')) {
-          const v = $('#mFavIn').value.trim(); if (!v) { $('#mFavIn').focus(); return; }
-          if (favs().indexOf(v) < 0) { favs().push(v); saveSettings(); }
+        const a = e.target.closest('[data-fa]');
+        if (a) {
+          const act = a.dataset.fa, list = favs();
+          if (act === 'add') { favMode = 'form'; favIdx = -1; }
+          else if (act === 'edit') favMode = favMode === 'edit' ? 'list' : 'edit';
+          else if (act === 'cancel') favMode = favIdx >= 0 ? 'edit' : 'list';
+          else if (act === 'del') { list.splice(favIdx, 1); saveSettings(); favMode = list.length ? 'edit' : 'list'; }
+          else if (act === 'save') {
+            const name = $('#mFavName').value.trim(), text = $('#mFavText').value.trim();
+            if (!name) { toast('이름을 적어 주세요'); $('#mFavName').focus(); return; }
+            if (!text) { toast('메모에 들어갈 내용을 적어 주세요'); $('#mFavText').focus(); return; }
+            if (favIdx >= 0) list[favIdx] = { name, text }; else list.push({ name, text });
+            saveSettings(); favMode = favIdx >= 0 ? 'edit' : 'list';
+          }
           paintFav(); return;
         }
-        if (e.target.closest('#mFavEd')) { favEdit = !favEdit; paintFav(); return; }
         const c = e.target.closest('[data-fav]'); if (!c) return;
         const i = +c.dataset.fav;
-        if (favEdit) { favs().splice(i, 1); saveSettings(); paintFav(); return; }
-        const ta = $('#mMemo'), v = favs()[i];
+        if (favMode === 'edit') { favMode = 'form'; favIdx = i; paintFav(); return; }
+        const ta = $('#mMemo'), v = favs()[i].text;
         ta.value = ta.value.trim() ? ta.value.trim() + '\n' + v : v;
+        toast(`'${favs()[i].name}' 넣었어요`);
       };
-      $('#mFavPanel').onkeydown = e => { if (e.key === 'Enter' && e.target.id === 'mFavIn') { e.preventDefault(); $('#mFavOk').click(); } };
       const loadLunch = async lb => {
         if (lb.disabled) return;
         lb.disabled = true;
