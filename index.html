@@ -234,10 +234,29 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .ph-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .ph-row{display:flex;gap:8px;height:150px}
 .ph-row .ph-add{flex:1;height:100%;flex-direction:column;gap:8px}
-.ph-row .lunch-btn{height:100%;width:96px;flex-direction:column;gap:6px;padding:0}
-.lunch-btn{height:46px;padding:0 16px;border-radius:14px;background:#FBE8D0;font-size:15px;font-weight:600;color:#333;display:flex;align-items:center;justify-content:center;gap:4px;flex:none}
-.ph-grid .lunch-btn{height:auto;aspect-ratio:1/1;padding:0;flex-direction:column;font-size:13px}
+.memo-box{background:#fff;border-radius:20px;margin-top:10px;padding:10px 0 0}
+.memo-top{display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 16px;min-height:32px}
+.memo-top span{font-size:14px;color:var(--sub);font-weight:600}
+.memo-box textarea{margin-top:0;padding-top:8px;background:transparent}
+.lunch-btn{height:32px;padding:0 12px;border-radius:999px;background:#FBE8D0;font-size:14px;font-weight:600;color:#333;display:flex;align-items:center;gap:4px;flex:none}
 .lunch-btn:disabled{opacity:.5}
+.ph .ed{position:absolute;left:5px;bottom:5px;height:24px;padding:0 8px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;display:flex;align-items:center;pointer-events:none}
+.pe{position:fixed;inset:0;background:#000;z-index:60;display:flex;flex-direction:column;color:#fff;touch-action:none;user-select:none;-webkit-user-select:none;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.pe-top,.pe-bot{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;gap:10px}
+.pe-top button,.pe-bot button{color:#fff;font-size:16px;padding:10px 14px;border-radius:999px;background:rgba(255,255,255,.14)}
+.pe-top .ok{background:#fff;color:#111;font-weight:700}
+.pe-bot{justify-content:center;padding-bottom:18px}
+.pe-stage{flex:1;position:relative;min-height:0}
+.pe-wrap{position:absolute}
+.pe-wrap canvas{display:block;width:100%;height:100%}
+.pe-box{position:absolute;border:1.5px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);touch-action:none}
+.pe-wrap{overflow:hidden}
+.pe-h{position:absolute;width:34px;height:34px;touch-action:none}
+.pe-h::after{content:'';position:absolute;width:18px;height:18px;border:4px solid #fff}
+.pe-h.tl{left:-8px;top:-8px}.pe-h.tl::after{left:4px;top:4px;border-right:0;border-bottom:0}
+.pe-h.tr{right:-8px;top:-8px}.pe-h.tr::after{right:4px;top:4px;border-left:0;border-bottom:0}
+.pe-h.bl{left:-8px;bottom:-8px}.pe-h.bl::after{left:4px;bottom:4px;border-right:0;border-top:0}
+.pe-h.br{right:-8px;bottom:-8px}.pe-h.br::after{right:4px;bottom:4px;border-left:0;border-top:0}
 .school-res{border-top:1px solid #e8e6e1}
 .school-res .field{flex-direction:column;align-items:flex-start;gap:2px}
 .school-res .field small{color:var(--sub);font-size:12px}
@@ -247,8 +266,6 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .ph-add{width:100%;height:46px;border-radius:14px;background:var(--soft);display:flex;align-items:center;justify-content:center;gap:6px;font-size:15px;color:#333;text-align:center}
 .ph-add b{font-size:22px;font-weight:300;line-height:1}
 .ph-row .ph-add b{font-size:34px}
-.ph-row .lunch-btn span,.ph-grid .lunch-btn span{font-size:26px}
-.ph-grid .lunch-btn{gap:6px;font-size:15px}
 .ph-grid .ph-add{height:auto;aspect-ratio:1/1}
 </style>
 </head>
@@ -350,7 +367,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-30';
+const APP_VERSION = '2026-11-01-31';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -887,6 +904,89 @@ function resizeImage(file, max, q){
   });
 }
 
+/* 사진 편집: 90° 회전 + 자유 비율 자르기. 바뀐 게 없으면 null */
+function openPhotoEditor(src){
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onerror = () => { toast('사진을 열지 못했어요'); resolve(null); };
+    img.onload = () => {
+      const el = document.createElement('div'); el.className = 'pe';
+      el.innerHTML = `<div class="pe-top"><button data-a="cancel">취소</button><button class="ok" data-a="ok">완료</button></div>
+        <div class="pe-stage"><div class="pe-wrap"><canvas></canvas><div class="pe-box"><i class="pe-h tl" data-h="tl"></i><i class="pe-h tr" data-h="tr"></i><i class="pe-h bl" data-h="bl"></i><i class="pe-h br" data-h="br"></i></div></div></div>
+        <div class="pe-bot"><button data-a="rot">↻ 회전</button><button data-a="reset">원래대로</button></div>`;
+      document.body.appendChild(el);
+      const stage = el.querySelector('.pe-stage'), wrap = el.querySelector('.pe-wrap'), cv = el.querySelector('canvas'), box = el.querySelector('.pe-box');
+      let rot = 0, crop = { x: 0, y: 0, w: 1, h: 1 }, W = 0, H = 0;   // crop: 돌린 사진 기준 0~1
+      const rotated = maxSide => {   // 돌린 사진 전체를 캔버스로
+        const sw = img.naturalWidth, sh = img.naturalHeight, side = rot % 2;
+        const k = Math.min(1, maxSide / Math.max(sw, sh));
+        const w = Math.round((side ? sh : sw) * k), h = Math.round((side ? sw : sh) * k);
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const g = c.getContext('2d'); g.translate(w / 2, h / 2); g.rotate(rot * Math.PI / 2);
+        g.drawImage(img, -sw * k / 2, -sh * k / 2, sw * k, sh * k); return c;
+      };
+      const layout = () => {
+        const pad = 22, sw = stage.clientWidth - pad * 2, sh = stage.clientHeight - pad * 2;
+        const iw = rot % 2 ? img.naturalHeight : img.naturalWidth, ih = rot % 2 ? img.naturalWidth : img.naturalHeight;
+        const k = Math.min(sw / iw, sh / ih); W = Math.round(iw * k); H = Math.round(ih * k);
+        Object.assign(wrap.style, { width: W + 'px', height: H + 'px', left: (stage.clientWidth - W) / 2 + 'px', top: (stage.clientHeight - H) / 2 + 'px' });
+        const c = rotated(Math.max(W, H) * 2); cv.width = c.width; cv.height = c.height; cv.getContext('2d').drawImage(c, 0, 0);
+        paint();
+      };
+      const paint = () => Object.assign(box.style, { left: crop.x * W + 'px', top: crop.y * H + 'px', width: crop.w * W + 'px', height: crop.h * H + 'px' });
+      layout();
+      // 끌기: 상자 안 = 옮기기, 모서리 = 크기 조절
+      let drag = null;
+      const MIN = 0.08, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+      const down = e => {
+        const h = e.target.closest('[data-h]'); if (!h && !e.target.closest('.pe-box')) return;
+        e.preventDefault(); drag = { h: h ? h.dataset.h : 'move', x: e.clientX, y: e.clientY, c: Object.assign({}, crop) };
+      };
+      const move = e => {
+        if (!drag) return; e.preventDefault();
+        const dx = (e.clientX - drag.x) / W, dy = (e.clientY - drag.y) / H, c = drag.c;
+        let { x, y, w, h } = c;
+        if (drag.h === 'move') { x = clamp(c.x + dx, 0, 1 - c.w); y = clamp(c.y + dy, 0, 1 - c.h); }
+        else {
+          if (drag.h[1] === 'l') { x = clamp(c.x + dx, 0, c.x + c.w - MIN); w = c.x + c.w - x; }
+          else w = clamp(c.w + dx, MIN, 1 - c.x);
+          if (drag.h[0] === 't') { y = clamp(c.y + dy, 0, c.y + c.h - MIN); h = c.y + c.h - y; }
+          else h = clamp(c.h + dy, MIN, 1 - c.y);
+        }
+        crop = { x, y, w, h }; paint();
+      };
+      const up = () => { drag = null; };
+      el.addEventListener('pointerdown', down);
+      window.addEventListener('pointermove', move, { passive: false });
+      window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+      window.addEventListener('resize', layout);
+      const close = out => {
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up); window.removeEventListener('resize', layout);
+        el.remove(); resolve(out);
+      };
+      el.querySelector('.pe-top').onclick = el.querySelector('.pe-bot').onclick = e => {
+        const a = (e.target.closest('[data-a]') || {}).dataset; if (!a || !a.a) return;
+        if (a.a === 'cancel') close(null);
+        else if (a.a === 'rot') { rot = (rot + 1) % 4; crop = { x: 0, y: 0, w: 1, h: 1 }; layout(); }
+        else if (a.a === 'reset') { rot = 0; crop = { x: 0, y: 0, w: 1, h: 1 }; layout(); }
+        else if (a.a === 'ok') {
+          const full = crop.x < 0.005 && crop.y < 0.005 && crop.w > 0.99 && crop.h > 0.99;
+          if (!rot && full) { close(null); return; }
+          const R = rotated(4000);
+          const sx = Math.round(crop.x * R.width), sy = Math.round(crop.y * R.height);
+          const sw = Math.max(1, Math.round(crop.w * R.width)), sh = Math.max(1, Math.round(crop.h * R.height));
+          const k = Math.min(1, 1280 / Math.max(sw, sh));
+          const o = document.createElement('canvas'); o.width = Math.round(sw * k); o.height = Math.round(sh * k);
+          o.getContext('2d').drawImage(R, sx, sy, sw, sh, 0, 0, o.width, o.height);
+          close(o.toDataURL('image/jpeg', 0.82));
+        }
+      };
+    };
+    img.src = src;
+  });
+}
+
 /* 식사 기록 */
 function openMealSheet(meal){
   const isNew = !meal;
@@ -901,7 +1001,8 @@ function openMealSheet(meal){
       <div class="meal-head"><button class="tag-sel" id="mTag"></button><input type="time" id="mTime" value="${m.time}"></div>
       <div class="tag-pick hidden" id="mTagPick">${tags.map(t => `<button class="tag-pill" data-tag="${t.id}" style="background:${t.color}">${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
       <div class="photos-edit" id="mPhotos"></div>
-      <textarea id="mMemo" rows="3" placeholder="무엇을 먹었나요? 메모를 남겨보세요.">${esc(m.memo)}</textarea>
+      <div class="memo-box"><div class="memo-top"><span>메모</span>${S.settings.school && S.settings.school.code ? '<button class="lunch-btn" id="mLunch">🍱 급식 불러오기</button>' : ''}</div>
+        <textarea id="mMemo" rows="3" placeholder="무엇을 먹었나요? 메모를 남겨보세요.">${esc(m.memo)}</textarea></div>
       ${isNew ? '' : '<button class="del-btn" id="mDelete">이 기록 삭제</button>'}`,
     mount(){
       // 태그는 여러 개 고를 수 있어요. 아래 목록에서 누를 때마다 켜고 꺼요.
@@ -922,17 +1023,15 @@ function openMealSheet(meal){
         if (i >= 0) sel.splice(i, 1); else sel.push(id);
         paintTag();
       };
-      // 학교를 골라두면 사진 추가 오른쪽에 '급식' 버튼
-      const lunchBtn = '<button class="lunch-btn" data-lunch="1"><span>🍱</span>급식</button>';
       const paintPhotos = () => {
         const box = $('#mPhotos'); if (!box) return;
         // 사진이 없으면 '＋ 사진 추가' 버튼 하나, 있으면 사진 옆에 ＋ 칸
         box.innerHTML = items.length
           ? `<div class="ph-grid" style="margin:0">${items.map((it, i) => {
               const src = it.data || S.photos[it.id] || '';
-              return `<div class="ph">${src ? `<img src="${src}" alt="">` : ''}<button class="rm" data-rm="${i}" aria-label="사진 빼기">✕</button></div>`;
-            }).join('')}<button class="ph-add" data-pick="1" aria-label="사진 추가"><b>＋</b></button>${lunchBtn}</div>`
-          : `<div class="ph-row"><button class="ph-add" data-pick="1"><b>＋</b>사진 추가</button>${lunchBtn}</div>`;
+              return `<div class="ph" data-edit="${i}">${src ? `<img src="${src}" alt=""><span class="ed">✎ 편집</span>` : ''}<button class="rm" data-rm="${i}" aria-label="사진 빼기">✕</button></div>`;
+            }).join('')}<button class="ph-add" data-pick="1" aria-label="사진 추가"><b>＋</b></button></div>`
+          : `<div class="ph-row"><button class="ph-add" data-pick="1"><b>＋</b>사진 추가</button></div>`;
       };
       paintPhotos();
       const missing = items.filter(it => it.id && !S.photos[it.id]).map(it => it.id);
@@ -942,12 +1041,18 @@ function openMealSheet(meal){
         if (rm) { items.splice(+rm.dataset.rm, 1); paintPhotos(); return; }
         const pk = e.target.closest('[data-pick]');
         if (pk) { pickPhoto(list => { list.forEach(data => items.push({ data })); paintPhotos(); }); return; }
-        const lb = e.target.closest('[data-lunch]');
-        if (lb) loadLunch(lb);
+        // 사진을 누르면 회전·자르기 (필요할 때만)
+        const ed = e.target.closest('[data-edit]');
+        if (ed) {
+          const it = items[+ed.dataset.edit]; if (!it) return;
+          const src = it.data || S.photos[it.id];
+          if (!src) { toast('사진을 불러오는 중이에요'); return; }
+          openPhotoEditor(src).then(out => { if (out) { items[+ed.dataset.edit] = { data: out }; paintPhotos(); } });
+        }
       };
+      if ($('#mLunch')) $('#mLunch').onclick = e => loadLunch(e.currentTarget);
       const loadLunch = async lb => {
         if (lb.disabled) return;
-        if (!(S.settings.school && S.settings.school.code)) { toast('설정 → 학교 급식에서 학교를 먼저 골라 주세요'); return; }
         lb.disabled = true;
         try {
           const r = await call('getLunch', { date: m.date || S.date });
