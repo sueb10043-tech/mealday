@@ -222,7 +222,14 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .toast.show{opacity:1;transform:translateX(-50%)}
 
 .file-in{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
-.meal-head{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff;border-radius:20px;padding:10px 10px 10px 12px;margin:4px 0 10px}
+.meal-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;background:#fff;border-radius:20px;padding:10px 10px 10px 12px;margin:4px 0 10px}
+.tag-sel{display:flex;flex-wrap:wrap;gap:4px;align-items:center;text-align:left;flex:1 1 auto}
+.meal-head .dt{flex:0 0 auto;margin-left:auto}
+.meal-head .dt input[type=date]{width:138px}
+.meal-head .dt input[type=time]{width:104px}
+.tag-pick .tag-pill{opacity:.4}
+.tag-pick .tag-pill.on{opacity:1;box-shadow:0 0 0 2px #111 inset}
+.meal-top{flex-wrap:wrap}
 .meal-head .dt{gap:6px}
 .meal-head .dt input{font-size:15px;padding:6px 8px;min-height:34px}
 .meal-head .tag-pill{padding:7px 12px;font-size:15px;flex:none}
@@ -347,7 +354,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-27';
+const APP_VERSION = '2026-11-01-28';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -366,7 +373,7 @@ const demoApi = (() => {
   let seq = 0; const nid = () => 'd' + (++seq) + Date.now().toString(36);
   const menus = [
     ['breakfast','07:40','우유, 오픈샌드위치(식빵 1/2), 복숭아'], ['breakfast','08:05','그릭요거트, 그래놀라 조금'],
-    ['lunch','12:20','급식 — 잡곡밥, 된장국, 닭볶음, 나물'], ['lunch','12:15','급식 — 카레라이스, 샐러드, 깍두기'],
+    ['lunch','12:20','잡곡밥\n된장국\n닭볶음\n나물'], ['lunch','12:15','카레라이스\n샐러드\n깍두기'],
     ['snack','15:30','아메리카노, 쿠키 하나'], ['dinner','18:40','현미밥 반 공기, 연어구이, 쌈채소'],
     ['dinner','19:10','떡볶이 조금, 삶은 달걀'], ['snack','21:00','바나나']
   ];
@@ -435,6 +442,11 @@ const demoApi = (() => {
         { name:'아천초등학교', office:'경상북도교육청', officeCode:'R10', code:'0000001', addr:'경상북도 김천시 (예시)' },
         { name:'아천초등학교능치분교장', office:'경상북도교육청', officeCode:'R10', code:'0000002', addr:'경상북도 김천시 어모면 (예시)' }
       ];
+      case 'getRange': {
+        const days = {};
+        for (let d = p.from; d <= p.to; d = addDays(d, 1)) days[d] = demoApi('getDay', { date: d });
+        return { days, lastSync: db.lastSync };
+      }
       case 'getLunch': return { dishes: ['잡곡밥', '쇠고기미역국', '닭갈비', '시금치나물', '배추김치', '요구르트'] };
     }
     throw new Error('알 수 없는 요청: ' + action);
@@ -549,7 +561,10 @@ async function boot(){
     S.settings = r.settings; S.lastSync = r.lastSync || '';
     if (!qLoad().length) lsSet('md_settings', JSON.stringify(r.settings)); else S.settings = JSON.parse(lsGet('md_settings') || 'null') || r.settings;
     if (qLoad().length) flush(); else await loadDay();
-    if (!DEMO) fetchMonth(todayStr().slice(0, 7)).catch(() => {});   // 기록 탭을 열기 전에 미리 받아두기
+    if (!DEMO) {
+      fetchMonth(todayStr().slice(0, 7)).catch(() => {});   // 기록 탭을 열기 전에 미리 받아두기
+      prefetchRange(addDays(todayStr(), -30), todayStr(), 7);   // 최근 한 달을 미리 받아서 날짜 이동을 바로 보이게
+    }
   } catch(e){ fail(e); }
 }
 /* GitHub에 새 버전이 올라왔는지 확인해서, 바뀌었으면 새 화면으로 다시 열기 */
@@ -566,7 +581,7 @@ async function checkUpdate(){
 }
 function pruneCache(){
   try {
-    const limit = addDays(todayStr(), -14);
+    const limit = addDays(todayStr(), -45);
     Object.keys(localStorage).forEach(k => { if (k.indexOf('md_day_') === 0 && k.slice(7) < limit) localStorage.removeItem(k); });
   } catch(e){}
 }
@@ -589,13 +604,19 @@ function openConnectSheet(){
 /* ───── 태그 ───── */
 const NO_TAG = { id:'', name:'', emoji:'🍽️', color:'#ECECEC' };
 function getTag(id){ if (!id) return NO_TAG; return (S.settings.tags.find(t => t.id === id)) || { id, name:'기타', emoji:'🍽️', color:'#ECECEC' }; }
+// 식사 태그는 여러 개 가능 (쉼표로 이어서 저장)
+function tagIdsOf(v){ return String(v || '').split(',').filter(Boolean); }
+function tagsOf(v){ return tagIdsOf(v).map(getTag); }
 function pill(t){ return t.name ? `<span class="tag-pill" style="background:${t.color}">${esc(t.emoji)} ${esc(t.name)}</span>` : ''; }
 
 /* ───── 오늘 화면 ───── */
 async function loadDay(afterFlush){
   const date = S.date;
   if (!DEMO && (!S.day || S.day.date !== date)) {
-    try { const c = JSON.parse(lsGet('md_day_' + date) || 'null'); if (c) { S.day = c; renderToday(); } } catch(e){}
+    let c = null;
+    try { c = JSON.parse(lsGet('md_day_' + date) || 'null'); } catch(e){}
+    if (c) { S.day = c; renderToday(); loadPhotos(c.meals); }
+    else prefetchRange(addDays(date, -14), date, 0);   // 저장 안 된 날이면 그 앞 2주를 한꺼번에 받아둬요
   }
   if (!DEMO && !afterFlush && qLoad().length) { flush(); return; }   // 보낼 게 남았으면 먼저 보내고, 끝나면 최신 기록을 받아와요
   $('#todayBody').style.opacity = S.day && S.day.date === date ? 1 : .5;
@@ -610,11 +631,67 @@ async function loadDay(afterFlush){
   finally { $('#todayBody').style.opacity = 1; }
 }
 
+/* 여러 날을 한 번에 받아 휴대폰에 저장 (사진은 photoDays일치만 미리 받아요) */
+const fetchedRanges = {};
+async function prefetchRange(from, to, photoDays){
+  const key = from + '~' + to; if (fetchedRanges[key]) return; fetchedRanges[key] = 1;
+  try {
+    const r = await call('getRange', { from, to });
+    if (qLoad().length) return;   // 아직 보낼 기록이 있으면 휴대폰 화면을 덮어쓰지 않아요
+    for (let d = from; d <= to; d = addDays(d, 1)) {
+      const day = Object.assign({ date: d, meals: [], states: [], body: null, activity: null, workouts: [], diary: '' }, r.days[d] || {}, { lastSync: r.lastSync });
+      lsSet('md_day_' + d, JSON.stringify(day));
+    }
+    if (photoDays) {
+      const meals = [];
+      for (let d = addDays(to, -(photoDays - 1)); d <= to; d = addDays(d, 1)) if (r.days[d]) meals.push(...r.days[d].meals);
+      loadPhotos(meals);
+    }
+  } catch(e){ delete fetchedRanges[key]; }
+}
+
+/* 사진은 휴대폰(IndexedDB)에 저장해 두고 다음부터는 바로 보여줘요 */
+let idbP = null;
+function idb(){
+  if (!idbP) idbP = new Promise((res, rej) => {
+    try { const r = indexedDB.open('mealday', 1); r.onupgradeneeded = () => r.result.createObjectStore('photos'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
+    catch(e){ rej(e); }
+  });
+  return idbP;
+}
+async function idbGetMany(keys){
+  const out = {};
+  try {
+    const db = await idb();
+    await Promise.all(keys.map(k => new Promise(res => {
+      const q = db.transaction('photos').objectStore('photos').get(k);
+      q.onsuccess = () => { if (q.result) out[k] = q.result; res(); }; q.onerror = () => res();
+    })));
+  } catch(e){}
+  return out;
+}
+async function idbPutMany(map){
+  try {
+    const db = await idb(), tx = db.transaction('photos', 'readwrite'), st = tx.objectStore('photos');
+    Object.keys(map).forEach(k => st.put(map[k], k));
+  } catch(e){}
+}
+
 function photoIds(m){ return String((m && m.photoId) || '').split(',').filter(Boolean); }
 async function loadPhotos(meals){
-  const need = [...new Set(meals.flatMap(photoIds).filter(id => !S.photos[id]))];
+  let need = [...new Set(meals.flatMap(photoIds).filter(id => !S.photos[id] && !/^tmp/.test(id)))];
   if (!need.length) return;
-  try { Object.assign(S.photos, await call('getPhotos', { ids: need })); applyPhotos(); } catch(e){}
+  const cached = DEMO ? {} : await idbGetMany(need);
+  if (Object.keys(cached).length) { Object.assign(S.photos, cached); applyPhotos(); }
+  need = need.filter(id => !S.photos[id]);
+  // 남은 사진은 몇 장씩 나눠 받아서 받는 대로 바로 보여줘요
+  for (let i = 0; i < need.length; i += 4) {
+    try {
+      const r = await call('getPhotos', { ids: need.slice(i, i + 4) });
+      Object.assign(S.photos, r); applyPhotos();
+      if (!DEMO) idbPutMany(r);
+    } catch(e){}
+  }
 }
 function applyPhotos(){
   document.querySelectorAll('img[data-photo]').forEach(img => {
@@ -738,9 +815,9 @@ function photoBox(ids, emoji){
     `<span class="pc">${photoImg(id)}${i === 3 && extra > 0 ? `<span class="more">+${extra}</span>` : ''}</span>`).join('')}</div>`;
 }
 function mealCard(m){
-  const t = getTag(m.tag), ids = photoIds(m);
-  const info = `<div class="meal-info"><div class="meal-top">${pill(t)}<span class="time mono">${korTime(m.time)}</span></div>${m.memo ? `<div class="memo">${esc(m.memo)}</div>` : ''}</div>`;
-  return `<button class="meal" data-act="meal-edit" data-id="${m.id}">${photoBox(ids, t.emoji)}${info}</button>`;
+  const ts = tagsOf(m.tag), ids = photoIds(m);
+  const info = `<div class="meal-info"><div class="meal-top">${ts.map(pill).join('')}<span class="time mono">${korTime(m.time)}</span></div>${m.memo ? `<div class="memo">${esc(m.memo)}</div>` : ''}</div>`;
+  return `<button class="meal" data-act="meal-edit" data-id="${m.id}">${photoBox(ids, ts[0] ? ts[0].emoji : '🍽️')}${info}</button>`;
 }
 
 /* ───── 아래에서 올라오는 창 ───── */
@@ -820,21 +897,28 @@ function openMealSheet(meal){
   openSheet({
     title: '식사 입력',
     html: `
-      <div class="meal-head"><button class="tag-pill" id="mTag"></button><div class="dt"><input type="date" id="mDate" value="${m.date}"><input type="time" id="mTime" value="${m.time}"></div></div>
+      <div class="meal-head"><button class="tag-sel" id="mTag"></button><div class="dt"><input type="date" id="mDate" value="${m.date}"><input type="time" id="mTime" value="${m.time}"></div></div>
       <div class="tag-pick hidden" id="mTagPick">${tags.map(t => `<button class="tag-pill" data-tag="${t.id}" style="background:${t.color}">${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
       <div class="photos-edit" id="mPhotos"></div>
       <textarea id="mMemo" rows="3" placeholder="무엇을 먹었나요? 메모를 남겨보세요.">${esc(m.memo)}</textarea>
       ${isNew ? '' : '<button class="del-btn" id="mDelete">이 기록 삭제</button>'}`,
     mount(){
+      // 태그는 여러 개 고를 수 있어요. 아래 목록에서 누를 때마다 켜고 꺼요.
+      let sel = tagIdsOf(m.tag);
       const paintTag = () => {
-        const b = $('#mTag'), t = getTag(m.tag);
-        b.classList.toggle('none', !t.name);
-        b.style.background = t.name ? t.color : '';
-        b.textContent = t.name ? `${t.emoji} ${t.name}` : '태그 선택';
+        m.tag = sel.join(',');
+        const ts = tagsOf(m.tag);
+        $('#mTag').innerHTML = ts.length ? ts.map(pill).join('') : '<span class="tag-pill none">태그 선택</span>';
+        document.querySelectorAll('#mTagPick [data-tag]').forEach(b => b.classList.toggle('on', sel.indexOf(b.dataset.tag) >= 0));
       };
       paintTag();
       $('#mTag').onclick = () => $('#mTagPick').classList.toggle('hidden');
-      $('#mTagPick').onclick = e => { const b = e.target.closest('[data-tag]'); if (!b) return; m.tag = b.dataset.tag; paintTag(); $('#mTagPick').classList.add('hidden'); };
+      $('#mTagPick').onclick = e => {
+        const b = e.target.closest('[data-tag]'); if (!b) return;
+        const id = b.dataset.tag, i = sel.indexOf(id);
+        if (i >= 0) sel.splice(i, 1); else sel.push(id);
+        paintTag();
+      };
       // 학교를 골라두면 사진 추가 오른쪽에 '급식' 버튼
       const lunchBtn = '<button class="lunch-btn" data-lunch="1"><span>🍱</span>급식</button>';
       const paintPhotos = () => {
@@ -865,11 +949,11 @@ function openMealSheet(meal){
         try {
           const r = await call('getLunch', { date: $('#mDate').value || S.date });
           if (!r.dishes.length) { toast('그날 급식 정보가 없어요'); return; }
-          const line = '급식 — ' + r.dishes.join(', ');
+          const line = r.dishes.join('\n');   // 메뉴만 한 줄에 하나씩
           const ta = $('#mMemo');
           ta.value = ta.value.trim() ? ta.value.trim() + '\n' + line : line;
           const lunchTag = S.settings.tags.find(t => t.name === '점심');
-          if (lunchTag) { m.tag = lunchTag.id; paintTag(); }
+          if (lunchTag && sel.indexOf(lunchTag.id) < 0) { sel.push(lunchTag.id); paintTag(); }
         } catch(e){ fail(e); }
         finally { lb.disabled = false; }
       };
@@ -1328,19 +1412,21 @@ async function drawExport(){
       }
       ctx.restore();
     };
-    const drawText = (m, t, x2, yy, memo) => {
-      if (t.name) {
+    const drawText = (m, ts, x2, yy, memo) => {
+      let px = x2;
+      ts.forEach(t => {
         ctx.font = `700 32px ${F}`;
         const label = `${t.emoji} ${t.name}`, pw = ctx.measureText(label).width + 52;
-        ctx.fillStyle = t.color; rr(ctx, x2, yy + 6, pw, 60, 30); ctx.fill();
-        ctx.fillStyle = '#222'; ctx.textBaseline = 'middle'; ctx.fillText(label, x2 + 26, yy + 37); ctx.textBaseline = 'top';
-      }
+        ctx.fillStyle = t.color; rr(ctx, px, yy + 6, pw, 60, 30); ctx.fill();
+        ctx.fillStyle = '#222'; ctx.textBaseline = 'middle'; ctx.fillText(label, px + 26, yy + 37); ctx.textBaseline = 'top';
+        px += pw + 12;
+      });
       ctx.font = `700 40px ${F}`; ctx.fillStyle = '#111'; ctx.fillText(korTime(m.time), x2, yy + 86);
       ctx.font = `400 32px ${F}`; ctx.fillStyle = '#8a8a8e';
       memo.forEach((l, i) => ctx.fillText(l, x2, yy + 86 + 48 + 16 + i * 46));
     };
     meals.forEach(m => {
-      const t = getTag(m.tag), ims = imgs[m.id] || [];
+      const ts = tagsOf(m.tag), t = ts[0] || NO_TAG, ims = imgs[m.id] || [];
       const x2 = P + SZ + 44, w2 = W - P - x2;
       ctx.font = `400 32px ${F}`;
       const memo = m.memo ? m.memo.split('\n').reduce((a, s) => a.concat(wrap(ctx, s, w2)), []) : [];
@@ -1355,7 +1441,7 @@ async function drawExport(){
           ctx.textAlign = 'left'; ctx.textBaseline = 'top';
           ctx.restore();
         }
-        drawText(m, t, x2, y, memo);
+        drawText(m, ts, x2, y, memo);
       }
       y += rowH + 40;
     });
