@@ -385,7 +385,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-42';
+const APP_VERSION = '2026-11-01-43';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1255,10 +1255,10 @@ function renderCal(data){
   for (let i = 0; i < offset; i++) cells += '<div></div>';
   for (let d = 1; d <= days; d++) {
     const ds = `${y}-${pad(m)}-${pad(d)}`, info = (data && data[ds]) || {};
-    // 색 점: 갈색 = 배변 좋음(👍), 빨강 = 배변 나쁨(👎) / 운동한 날은 날짜 오른쪽 위에 작게 🏃
+    // 색 점: 갈색 = 배변 좋음(👍), 빨강 = 배변 나쁨(👎) / 운동한 날은 날짜 오른쪽 위에 작게 💪
     const tl = info.toilet || [];
     const dots = (tl.some(t => t !== '👎') ? '<i class="cd-good"></i>' : '') + (tl.indexOf('👎') >= 0 ? '<i class="cd-bad"></i>' : '');
-    const ex = ((info.workouts || []).length ? '🏃' : '') + (info.waist ? '📏' : '');   // 운동 → 허리 치수 순서
+    const ex = ((info.workouts || []).length ? '💪' : '') + (info.waist ? '📏' : '');   // 운동 → 허리 치수 순서
     const exHtml = ex ? `<span class="cex">${ex}</span>` : '';
     const wd = new Date(y, m - 1, d).getDay();
     cells += `<button class="cell${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-date="${ds}"><span class="dn">${d}${exHtml}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="w mono">${(+info.weight).toFixed(1)}</span>` : ''}</button>`;
@@ -1288,7 +1288,7 @@ function workoutSummary(data){
     ws.forEach(w => { const m = +w.minutes || 0; mins += m; const o = by[w.name] = by[w.name] || { n: 0, m: 0 }; o.n++; o.m += m; });
   });
   if (!days) return '<p class="empty" style="text-align:center">이번 달 운동 기록이 아직 없어요.</p>';
-  return `<div class="ws-top" style="text-align:center;padding:6px 8px">🏃 이번 달 <b>${days}일</b> 운동했어요</div>`;
+  return `<div class="ws-top" style="text-align:center;padding:6px 8px">💪 이번 달 <b>${days}일</b> 운동했어요</div>`;
 }
 function chartSvg(data, days){
   const keys = Object.keys(data).sort();
