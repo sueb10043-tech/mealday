@@ -354,7 +354,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-01-28';
+const APP_VERSION = '2026-11-01-29';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -653,10 +653,14 @@ async function prefetchRange(from, to, photoDays){
 /* 사진은 휴대폰(IndexedDB)에 저장해 두고 다음부터는 바로 보여줘요 */
 let idbP = null;
 function idb(){
-  if (!idbP) idbP = new Promise((res, rej) => {
-    try { const r = indexedDB.open('mealday', 1); r.onupgradeneeded = () => r.result.createObjectStore('photos'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
-    catch(e){ rej(e); }
-  });
+  // 일부 아이폰에서 저장 공간 열기가 멈추는 경우가 있어서, 1.5초 안에 안 열리면 건너뛰어요
+  if (!idbP) idbP = Promise.race([
+    new Promise((res, rej) => {
+      try { const r = indexedDB.open('mealday', 1); r.onupgradeneeded = () => r.result.createObjectStore('photos'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked')); }
+      catch(e){ rej(e); }
+    }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('idb timeout')), 1500))
+  ]).catch(e => { idbP = Promise.reject(e); idbP.catch(() => {}); throw e; });
   return idbP;
 }
 async function idbGetMany(keys){
@@ -681,7 +685,8 @@ function photoIds(m){ return String((m && m.photoId) || '').split(',').filter(Bo
 async function loadPhotos(meals){
   let need = [...new Set(meals.flatMap(photoIds).filter(id => !S.photos[id] && !/^tmp/.test(id)))];
   if (!need.length) return;
-  const cached = DEMO ? {} : await idbGetMany(need);
+  let cached = {};
+  if (!DEMO) { try { cached = await Promise.race([idbGetMany(need), new Promise(r => setTimeout(() => r({}), 2000))]); } catch(e){ cached = {}; } }
   if (Object.keys(cached).length) { Object.assign(S.photos, cached); applyPhotos(); }
   need = need.filter(id => !S.photos[id]);
   // 남은 사진은 몇 장씩 나눠 받아서 받는 대로 바로 보여줘요
