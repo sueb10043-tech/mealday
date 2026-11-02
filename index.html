@@ -72,7 +72,7 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .x-btn{width:40px;height:40px;border-radius:50%;background:#e4e4e4;display:grid;place-items:center;font-size:16px;color:#555;text-align:center}
 
 .sec{margin-top:26px}
-.sec-add,.sec-head{display:flex;align-items:center;gap:6px;color:#222;font-size:16px;font-weight:700;margin-bottom:4px;min-height:36px}
+.sec-add,.sec-head{display:flex;align-items:center;gap:6px;white-space:nowrap;color:#222;font-size:16px;font-weight:700;margin-bottom:4px;min-height:36px}
 .sec-add span{font-weight:400;color:#555}
 .sec-head{justify-content:space-between}
 .sec-add span{font-size:20px;line-height:1}
@@ -257,6 +257,14 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .ex{position:fixed;inset:0;background:#f2f2f2;z-index:50;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
 .ex-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 12px 22px}
 .ex-head > span{font-weight:700;font-size:20px}
+.ex-mode{display:flex;background:#e4e2dd;border-radius:999px;padding:3px}
+.ex-mode button{padding:7px 16px;border-radius:999px;font-size:15px;font-weight:700;color:#777}
+.ex-mode button.on{background:#fff;color:#111;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.ex-week{display:flex;align-items:center;justify-content:center;gap:16px;padding:0 16px 10px}
+.ex-week span{font-size:16px;font-weight:700;min-width:130px;text-align:center}
+.ex-week button{width:36px;height:36px;border-radius:50%;background:#e9e7e2;font-size:20px;display:grid;place-items:center;padding:0;line-height:1;text-align:center}
+#exWeek img{margin-bottom:14px}
+#exWeek .wk-day{font-size:13px;color:var(--sub);font-weight:600;margin:4px 4px 6px}
 .ex-opts{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 12px}
 .ex-opt{padding:8px 14px;border-radius:999px;border:1.5px solid #dcdcdc;background:#fff;font-size:14px}
 .ex-opt.on{background:#111;border-color:#111;color:#fff}
@@ -400,14 +408,15 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 
 <div id="ex" class="ex hidden">
   <div class="ex-head">
-    <span>하루 공유</span>
+    <div class="ex-mode"><button data-mode="day" class="on">하루</button><button data-mode="week">일주일</button></div>
     <div class="head-acts">
       <button class="pill-btn primary" id="exShare">공유</button>
       <button class="x-btn" id="exClose" aria-label="닫기">✕</button>
     </div>
   </div>
+  <div class="ex-week hidden" id="exWeekNav"><button data-wk="-1" aria-label="이전 주">‹</button><span id="exWeekLbl"></span><button data-wk="1" aria-label="다음 주">›</button></div>
   <div class="ex-opts" id="exOpts"></div>
-  <div class="ex-scroll"><img id="exImg" alt="하루 기록 이미지"></div>
+  <div class="ex-scroll"><img id="exImg" alt="하루 기록 이미지"><div id="exWeek" class="hidden"></div></div>
   <p id="exMsg"></p>
 </div>
 
@@ -452,7 +461,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-02-62';
+const APP_VERSION = '2026-11-02-65';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -839,14 +848,20 @@ function applyPhotos(){
   });
 }
 
-function waterMl(){ return +((S.day && S.day.activity && S.day.activity.water) || 0); }
+function waterMl(day){
+  const dd = day || S.day, a = dd && dd.activity; if (!a) return 0;
+  const log = String(a.waterLog || '').split(',').flatMap(t => { t = String(t).trim(); return /^\d+$/.test(t) && t.length > 4 && t.length % 3 === 0 ? t.match(/\d{3}/g) : [t]; }).map(Number).filter(n => n > 0);
+  return log.length ? log.reduce((x, y) => x + y, 0) : +(a.water || 0);   // 잔별 기록이 있으면 그걸 더한 값
+}
 function fmtMl(n){ return Number(n).toLocaleString('ko-KR') + 'ml'; }
 function waterHtml(){
   return `<button class="water" data-act="water"><span>💧 물 섭취</span><b class="mono" style="font-weight:800">${fmtMl(waterMl())}</b><span>＋</span></button>`;
 }
 function openWaterSheet(){
   const a = (S.day && S.day.activity) || {};
-  const log = String(a.waterLog || '').split(',').map(Number).filter(n => n > 0);
+  // 예전에 시트가 '300,100,500'을 숫자 300100500으로 바꿔 저장한 경우도 세 자리씩 되살려요
+  const fix = t => { t = String(t).trim(); return /^\d+$/.test(t) && t.length > 4 && t.length % 3 === 0 ? t.match(/\d{3}/g) : [t]; };
+  const log = String(a.waterLog || '').split(',').flatMap(fix).map(Number).filter(n => n > 0);
   if (!log.length && +a.water > 0) log.push(+a.water);
   const total = () => log.reduce((s, n) => s + n, 0);
   openSheet({
@@ -874,7 +889,7 @@ function openWaterSheet(){
     }
   });
 }
-const WK_PRESETS = ['전신근력운동', '걷기', '스텝퍼'];
+const WK_PRESETS = ['전신근력운동', '걷기(인클라인)', '걷기', '스텝퍼'];
 function workoutIcon(name){
   const n = String(name);
   if (/스텝/.test(n)) return '🪜';
@@ -1854,6 +1869,9 @@ async function openExport(){
   $('#ex').classList.remove('hidden');
   S.exOpt = { state: false, body: false, act: true, meal: true, diary: false };
   paintExOpts();
+  S.exMode = 'day'; S.exWeek = weekStartOf(S.date);
+  document.querySelectorAll('.ex-mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === 'day'));
+  $('#exWeekNav').classList.add('hidden'); $('#exImg').classList.remove('hidden'); $('#exWeek').classList.add('hidden');
   $('#exImg').removeAttribute('src');
   $('#exMsg').textContent = '이미지를 만드는 중…';
   await loadPhotos(S.day.meals);
@@ -1870,8 +1888,9 @@ function paintExOpts(){
   const all = EX_ITEMS.every(([k]) => S.exOpt[k]);
   $('#exOpts').innerHTML = `<button class="ex-opt${all ? ' on' : ''}" data-k="all">${all ? '✓ ' : ''}전체</button>` + EX_ITEMS.map(([k, n]) => `<button class="ex-opt${S.exOpt[k] ? ' on' : ''}" data-k="${k}">${S.exOpt[k] ? '✓ ' : ''}${n}</button>`).join('');
 }
-async function drawExport(){
-  const d = S.day, W = 1080, P = 64, F = '"Pretendard", -apple-system, "Apple SD Gothic Neo", sans-serif';
+async function drawExport(dayArg){
+  if (!dayArg && S.exMode === 'week') return drawWeek();
+  const d = dayArg || S.day, W = 1080, P = 64, F = '"Pretendard", -apple-system, "Apple SD Gothic Neo", sans-serif';
   const imgs = {};
   const meals = S.exOpt.meal ? d.meals : [];
   for (const m of meals) {
@@ -1883,7 +1902,7 @@ async function drawExport(){
   if (S.exOpt.state) {
     const lbs = dayLabels(d);
     if (lbs.length) info.push(['상태', lbs.join('  ·  ')]);
-    if (waterMl()) info.push(['물', fmtMl(waterMl())]);
+    if (waterMl(d)) info.push(['물', fmtMl(waterMl(d))]);
   }
   if (S.exOpt.body) {
     const p = [];
@@ -2015,12 +2034,74 @@ async function drawExport(){
   c.height = Math.max(run(false), 400);
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, c.height);
   run(true);
-  S.exUrl = c.toDataURL('image/jpeg', 0.92);
+  const url = c.toDataURL('image/jpeg', 0.92);
+  if (dayArg) return url;   // 일주일 모드: 그날 이미지만 돌려줘요
+  S.exUrl = url;
   $('#exImg').src = S.exUrl;
   $('#exMsg').textContent = '공유 버튼이 안 되면 이미지를 길게 눌러 저장하거나 공유하세요.';
 }
 
+/* 일주일 공유: 그 주에 기록이 있는 날마다 하루 이미지를 만들어 한꺼번에 공유 */
+function weekStartOf(date){
+  const ws = S.settings.weekStart === 'sun' ? 0 : 1, p = date.split('-').map(Number);
+  const d = new Date(p[0], p[1] - 1, p[2]);
+  return addDays(date, -((d.getDay() - ws + 7) % 7));
+}
+function exWeekLabel(){
+  const a = S.exWeek, b = addDays(a, 6), md = x => `${+x.slice(5, 7)}/${+x.slice(8, 10)}`;
+  $('#exWeekLbl').textContent = `${md(a)} ~ ${md(b)}`;
+}
+let weekJob = 0;
+async function drawWeek(){
+  const job = ++weekJob, from = S.exWeek, to = addDays(from, 6);
+  exWeekLabel();
+  $('#exWeek').innerHTML = ''; S.exWeekUrls = [];
+  $('#exMsg').textContent = '일주일 이미지를 만드는 중…';
+  // 그 주 기록: 휴대폰 저장본을 먼저 쓰고, 서버에서 최신으로 받아요
+  const days = {};
+  for (let d = from; d <= to; d = addDays(d, 1)) { try { const c = JSON.parse(lsGet('md_day_' + d) || 'null'); if (c) days[d] = c; } catch(e){} }
+  if (S.day && S.day.date >= from && S.day.date <= to) days[S.day.date] = S.day;
+  try {
+    const r = await call('getRange', { from, to });
+    if (job !== weekJob) return;
+    Object.keys(r.days || {}).forEach(d => { if (!(S.day && S.day.date === d && qLoad().length)) days[d] = Object.assign({ date: d, meals: [], states: [], body: null, activity: null, workouts: [], diary: '' }, r.days[d]); });
+  } catch(e){}
+  if (job !== weekJob) return;
+  const list = Object.keys(days).sort().map(k => days[k]).filter(d =>
+    (d.meals || []).length || (d.states || []).length || d.body || (d.workouts || []).length || d.diary || (d.activity && (+d.activity.steps || +d.activity.water)));
+  if (!list.length) { $('#exMsg').textContent = '이 주에는 기록이 없어요.'; return; }
+  await loadPhotos([].concat(...list.map(d => d.meals || [])));
+  if (job !== weekJob) return;
+  const out = [];
+  for (const d of list) {
+    const day = Object.assign({ meals: [], states: [], workouts: [], diary: '' }, d);
+    const url = await drawExport(day);
+    if (job !== weekJob) return;
+    out.push({ date: d.date, url });
+    $('#exWeek').insertAdjacentHTML('beforeend', `<p class="wk-day">${esc(korDate(d.date))}</p><img src="${url}" alt="">`);
+  }
+  S.exWeekUrls = out;
+  $('#exMsg').textContent = `기록이 있는 ${out.length}일 · 이미지 ${out.length}장 · 공유를 누르면 한꺼번에 보내져요.`;
+}
+function setExMode(mode){
+  S.exMode = mode;
+  document.querySelectorAll('.ex-mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  $('#exWeekNav').classList.toggle('hidden', mode !== 'week');
+  $('#exImg').classList.toggle('hidden', mode === 'week');
+  $('#exWeek').classList.toggle('hidden', mode !== 'week');
+  if (mode === 'week') { S.exWeek = S.exWeek || weekStartOf(S.date); drawWeek(); }
+  else drawExport();
+}
 async function shareExport(){
+  if (S.exMode === 'week') {
+    const list = S.exWeekUrls || []; if (!list.length) return;
+    try {
+      const files = await Promise.all(list.map(async x => new File([await (await fetch(x.url)).blob()], `mealday_${x.date}.jpg`, { type: 'image/jpeg' })));
+      if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files }); return; }
+    } catch(e){ if (e && e.name === 'AbortError') return; }
+    toast('이미지를 하나씩 길게 눌러 저장·공유해 주세요');
+    return;
+  }
   if (!S.exUrl) return;
   try {
     const blob = await (await fetch(S.exUrl)).blob();
@@ -2149,6 +2230,8 @@ function bind(){
 
   $('#exClose').onclick = () => $('#ex').classList.add('hidden');
   $('#exShare').onclick = shareExport;
+  document.querySelector('.ex-mode').onclick = e => { const b = e.target.closest('[data-mode]'); if (b && b.dataset.mode !== S.exMode) setExMode(b.dataset.mode); };
+  $('#exWeekNav').onclick = e => { const b = e.target.closest('[data-wk]'); if (!b) return; S.exWeek = addDays(S.exWeek, 7 * +b.dataset.wk); drawWeek(); };
   $('#exOpts').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; const k = b.dataset.k; if (k === 'all') EX_ITEMS.forEach(([x]) => S.exOpt[x] = true); else S.exOpt[k] = !S.exOpt[k]; paintExOpts(); drawExport(); };
 
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
