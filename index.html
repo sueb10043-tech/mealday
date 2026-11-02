@@ -423,7 +423,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-02-49';
+const APP_VERSION = '2026-11-02-50';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1098,6 +1098,11 @@ function openPhotoEditor(src){
   });
 }
 
+function growMemo(){
+  const ta = $('#mMemo'); if (!ta) return;
+  ta.style.height = '';                       // 기본 높이(110px)로 되돌린 뒤
+  if (ta.scrollHeight > ta.clientHeight + 1) ta.style.height = (ta.scrollHeight + 2) + 'px';   // 넘칠 때만 늘리기
+}
 /* 식사 기록 */
 function openMealSheet(meal){
   const isNew = !meal;
@@ -1221,7 +1226,7 @@ function openMealSheet(meal){
         const i = +c.dataset.fav;
         if (favMode === 'edit') { favMode = 'form'; favIdx = i; paintFav(); return; }
         const ta = $('#mMemo'), v = favs()[i].text;
-        ta.value = ta.value.trim() ? ta.value.trim() + '\n' + v : v;
+        ta.value = ta.value.trim() ? ta.value.trim() + '\n' + v : v; growMemo();
         toast(`'${favs()[i].name}' 넣었어요`);
       };
       const loadLunch = async lb => {
@@ -1232,12 +1237,15 @@ function openMealSheet(meal){
           if (!r.dishes.length) { toast('그날 급식 정보가 없어요'); return; }
           const line = r.dishes.join('\n');   // 메뉴만 한 줄에 하나씩
           const ta = $('#mMemo');
-          ta.value = ta.value.trim() ? ta.value.trim() + '\n' + line : line;
+          ta.value = ta.value.trim() ? ta.value.trim() + '\n' + line : line; growMemo();
           const lunchTag = S.settings.tags.find(t => t.name === '점심');
           if (lunchTag && sel.indexOf(lunchTag.id) < 0) { sel.push(lunchTag.id); paintTag(); }
         } catch(e){ fail(e); }
         finally { lb.disabled = false; }
       };
+      // 메모가 칸을 넘칠 때만 칸(과 입력창)이 아래로 늘어나요. 화면 92%까지 크면 그 뒤로는 창 안에서 스크롤
+      $('#mMemo').addEventListener('input', growMemo);
+      growMemo();
       armDelete($('#mDelete'), async () => {
         S.day.meals = S.day.meals.filter(x => x.id !== m.id); renderToday(); cacheDay();
         send('deleteMeal', { id: m.id });
