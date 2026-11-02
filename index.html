@@ -446,7 +446,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-02-59';
+const APP_VERSION = '2026-11-02-60';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1474,7 +1474,7 @@ function renderCal(data){
     const exHtml = ex ? `<span class="cex">${ex}</span>` : '';
     const wd = new Date(y, m - 1, d).getDay();
     const inner = tab === 'all'
-      ? `<span class="dn">${d}${exHtml}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="w mono">${(+info.weight).toFixed(1)}<small>kg</small></span>` : ''}${has(info.waist1) || has(info.waist2) ? `<span class="w wst mono">${has(info.waist1) ? (+info.waist1).toFixed(1) : '-'}/${has(info.waist2) ? (+info.waist2).toFixed(1) : '-'}</span>` : ''}`
+      ? `<span class="dn">${d}${exHtml}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="bv mono">${(+info.weight).toFixed(1)}<small>kg</small></span>` : ''}${has(info.waist1) || has(info.waist2) ? `<span class="bv mono">${has(info.waist1) ? (+info.waist1).toFixed(1) : '-'}/${has(info.waist2) ? (+info.waist2).toFixed(1) : '-'}</span>` : ''}`
       : `<span class="dn">${d}</span>${detail(info)}`;
     cells += `<button class="cell${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-date="${ds}">${inner}</button>`;
   }
