@@ -446,7 +446,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-02-58';
+const APP_VERSION = '2026-11-02-59';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -508,6 +508,7 @@ const demoApi = (() => {
         db.states = db.states.filter(x => x.date !== p.date);
         if ((p.labels || []).length) db.states.push({ id:nid(), date:p.date, time:p.time || '', labels:p.labels });
         return true;
+      case 'importSheet': return { rows: 0, empty: true };
       case 'importBody': { let added = 0, updated = 0; (p.rows || []).forEach(x => { if (db.body[x.date]) updated++; else added++; db.body[x.date] = Object.assign({ date:x.date }, db.body[x.date], { weight:x.weight, bodyFat:x.bodyFat, bmi:x.bmi, muscle:x.muscle }); }); return { added, updated }; }
       case 'saveBody': db.body[p.date] = Object.assign({ date:p.date }, db.body[p.date], { weight:p.weight, bodyFat:p.bodyFat, bmi:p.bmi, muscle:p.muscle, waist1:p.waist1, waist2:p.waist2 }); return db.body[p.date];
       case 'saveWorkout': {
@@ -1530,6 +1531,12 @@ function parseInBody(text){
   });
   return Object.keys(byDate).sort().map(d => byDate[d]);
 }
+// 한꺼번에 넣은 뒤: 휴대폰에 저장해 둔 달력·하루 기록을 비워서 새로 받아오게
+function clearDataCaches(){
+  try { Object.keys(localStorage).forEach(k => { if (/^md_(month|day)_/.test(k)) localStorage.removeItem(k); }); } catch(err){}
+  Object.keys(monthMem).forEach(k => delete monthMem[k]); S.calData = null;
+  Object.keys(fetchedRanges).forEach(k => delete fetchedRanges[k]);
+}
 async function onInBodyPicked(e){
   const f = e.target.files && e.target.files[0]; if (!f) return;
   try {
@@ -1537,10 +1544,7 @@ async function onInBodyPicked(e){
     if (!rows.length) { toast('가져올 기록이 없어요'); return; }
     toast(`${rows.length}일치 인바디 기록을 넣는 중…`);
     const r = await call('importBody', { rows });
-    // 저장된 달력·하루 기록을 새로 받아오도록 비워요
-    try { Object.keys(localStorage).forEach(k => { if (/^md_(month|day)_/.test(k)) localStorage.removeItem(k); }); } catch(err){}
-    Object.keys(monthMem).forEach(k => delete monthMem[k]); S.calData = null;
-    Object.keys(fetchedRanges).forEach(k => delete fetchedRanges[k]);
+    clearDataCaches();
     toast(`인바디 기록 ${r.added + r.updated}일치를 넣었어요 (새로 ${r.added} · 바뀜 ${r.updated})`);
   } catch(err){ fail(err); }
 }
@@ -1660,6 +1664,10 @@ function renderSet(){
     <div class="set-label">인바디 기록 가져오기</div>
     <div class="group"><button class="field link" data-act="inbody">인바디 CSV 파일 고르기</button></div>
     <p class="hint">인바디 앱에서 내보낸 CSV 파일을 고르면 날짜별 체중·체지방률·골격근량·BMI가 한 번에 들어가요. 같은 날짜는 인바디 값으로 바꾸고, 허리 치수는 그대로 둬요. 하루에 여러 번 쟀으면 그날 가장 이른 측정값을 써요.</p>
+
+    <div class="set-label">예전 기록 한꺼번에 넣기</div>
+    <div class="group"><button class="field link" data-act="bulk">일괄입력 탭 반영하기</button></div>
+    <p class="hint">구글 시트의 '일괄입력' 탭에 날짜별로 신체·상태·운동을 적은 뒤 누르면 기록으로 옮겨져요. 탭이 없으면 처음 누를 때 만들어져요. 반영된 줄에는 ✓ 가 붙어서 두 번 들어가지 않아요.</p>
 
     <div class="set-label">건강 앱 동기화</div>
     <div class="group"><div class="field"><span>단축어 이름</span><input id="scName" class="plain" value="${esc(st.shortcutName || DEFAULT_SC)}"></div></div>
@@ -2021,6 +2029,17 @@ function bind(){
         case 'tag': openTagSheet(st.tags.find(t => t.id === el.dataset.id)); break;
         case 'tag-new': openTagSheet(); break;
         case 'inbody': { const fi = $('#inbodyInput'); fi.value = ''; fi.click(); break; }
+        case 'bulk': {
+          if (el.disabled) break; el.disabled = true; el.textContent = '반영하는 중…';
+          try {
+            const r = await call('importSheet', {});
+            if (r.created) toast("시트에 '일괄입력' 탭을 만들었어요. 채운 뒤 다시 눌러 주세요");
+            else if (r.empty || !r.rows) toast('새로 반영할 줄이 없어요');
+            else { clearDataCaches(); toast(`${r.rows}줄 반영 (신체 ${r.body}일 · 상태 ${r.states}일 · 운동 ${r.workouts}개)${r.bad.length ? ` · 날짜 오류 ${r.bad.length}줄` : ''}`); }
+          } catch(err){ fail(err); }
+          finally { el.disabled = false; el.textContent = '일괄입력 탭 반영하기'; }
+          break;
+        }
         case 'back': setTab('today'); break;
         case 'connect': openConnectSheet(); break;
         case 'chip': openChipSheet(+el.dataset.i); break;
