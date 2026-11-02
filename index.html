@@ -282,6 +282,7 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .fav-actions{display:flex;align-items:center;gap:6px}
 .fav-actions button{height:34px;padding:0 14px;border-radius:10px;font-size:14px;font-weight:600}
 .fav-main{background:#111;color:#fff}
+.fav-actions .fav-ic{width:34px;padding:0;display:grid;place-items:center}
 .fav-sub{background:#e6e4de;color:#333}
 .fav-del{background:transparent;color:#E5484D;padding:0 4px!important}
 .fav-form label{display:block;font-size:12px;color:var(--sub);font-weight:600;margin:2px 2px 4px}
@@ -422,7 +423,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-02-47';
+const APP_VERSION = '2026-11-02-49';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -645,7 +646,8 @@ async function boot(){
     if (qLoad().length) flush(); else await loadDay();
     if (!DEMO) {
       fetchMonth(todayStr().slice(0, 7)).catch(() => {});   // 기록 탭을 열기 전에 미리 받아두기
-      prefetchRange(addDays(todayStr(), -30), todayStr(), 7);   // 최근 한 달을 미리 받아서 날짜 이동을 바로 보이게
+      prefetchRange(addDays(todayStr(), -30), addDays(todayStr(), 7), 7);   // 최근 한 달 + 앞으로 일주일을 미리 받아서 날짜 이동을 바로 보이게
+      if (S.settings.school && S.settings.school.code) setTimeout(() => warmLunch(todayStr()), 1500);   // 내일 급식도 미리
     }
   } catch(e){ fail(e); }
 }
@@ -701,6 +703,11 @@ async function loadDay(afterFlush){
     let c = null;
     try { c = JSON.parse(lsGet('md_day_' + date) || 'null'); } catch(e){}
     if (c) { S.day = c; renderToday(); loadPhotos(c.meals); }
+    else if (date > todayStr()) {
+      // 미래 날짜는 기록이 거의 없으니 서버를 기다리지 않고 빈 화면(+급식)을 바로 보여줘요
+      S.day = { date, meals: [], states: [], body: null, activity: null, workouts: [], diary: '' }; renderToday();
+      prefetchRange(date, addDays(date, 7), 0);
+    }
     else prefetchRange(addDays(date, -14), date, 0);   // 저장 안 된 날이면 그 앞 2주를 한꺼번에 받아둬요
   }
   if (!DEMO && !afterFlush && qLoad().length) { flush(); return; }   // 보낼 게 남았으면 먼저 보내고, 끝나면 최신 기록을 받아와요
@@ -729,7 +736,8 @@ async function prefetchRange(from, to, photoDays){
     }
     if (photoDays) {
       const meals = [];
-      for (let d = addDays(to, -(photoDays - 1)); d <= to; d = addDays(d, 1)) if (r.days[d]) meals.push(...r.days[d].meals);
+      const pEnd = to < todayStr() ? to : todayStr();   // 사진은 오늘까지 기준 최근 photoDays일
+      for (let d = addDays(pEnd, -(photoDays - 1)); d <= pEnd; d = addDays(d, 1)) if (r.days[d]) meals.push(...r.days[d].meals);
       loadPhotos(meals);
     }
   } catch(e){ delete fetchedRanges[key]; }
@@ -871,6 +879,12 @@ function lunchPreviewHtml(date){
   return `<div class="lunch-pv"><b>🍱 급식 메뉴</b>${v.length ? `<p>${v.map(esc).join(' · ')}</p>` : '<p class="lp-empty">이날은 급식 정보가 없어요.</p>'}</div>`;
 }
 const lunchBusy = {};
+// 다음날 급식을 미리 받아둬서 › 를 눌렀을 때 바로 보이게
+function warmLunch(date){
+  const nx = addDays(date, 1);
+  if (lunchMem[nx] !== undefined || lsGet('md_lunch_' + nx)) return;
+  fetchLunchPreview(nx);
+}
 async function fetchLunchPreview(date){
   if (lunchBusy[date]) return; lunchBusy[date] = 1;
   try {
@@ -910,7 +924,7 @@ function renderToday(){
   h += `</section>`;
 
   h += `<section class="sec"><button class="sec-add" data-act="meal-new">식사 <span>＋</span></button>`;
-  if (S.date > today && S.settings.school && S.settings.school.code) h += lunchPreviewHtml(S.date);   // 미래 날짜: 급식 메뉴 미리 보기
+  if (S.date > today && S.settings.school && S.settings.school.code) { h += lunchPreviewHtml(S.date); warmLunch(S.date); }   // 미래 날짜: 급식 메뉴 미리 보기
   h += d.meals.length ? d.meals.map(mealCard).join('') : '<p class="empty">아직 기록이 없어요.</p>';
   h += `</section>`;
 
@@ -1152,6 +1166,10 @@ function openMealSheet(meal){
       // ⭐ 즐겨찾기: 이름(예: 오나오)을 누르면 등록해 둔 상세 내용(예: 오트밀 3숟…)이 메모에 들어가요
       // favMode: 'list' = 이름 목록, 'edit' = 이름을 누르면 수정, 'form' = 추가/수정 입력창
       let favMode = 'list', favIdx = -1;
+      const svg = d => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+      const ICON_PEN = svg('<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>');
+      const ICON_CHECK = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>');
+      const ICON_PLUS = svg('<path d="M12 5v14M5 12h14"/>');
       const favs = () => {
         // 예전 형식(이름만 저장)도 { name, text } 로 바꿔서 써요
         S.settings.favs = (S.settings.favs || []).map(f => typeof f === 'string' ? { name: f, text: f } : f);
@@ -1175,7 +1193,7 @@ function openMealSheet(meal){
           ${list.length ? `<div class="fav-list">${list.map((f, i) => `<button class="fav-chip${edit ? ' edit' : ''}" data-fav="${i}">${esc(f.name)}${edit ? ' <span class="pen">✎</span>' : ''}</button>`).join('')}</div>`
             : '<p class="fav-empty">아직 즐겨찾기가 없어요. ＋ 추가를 눌러 등록해 주세요.</p>'}
           ${edit ? '<p class="fav-empty" style="margin-top:8px">고칠 즐겨찾기를 눌러 주세요.</p>' : ''}
-          <div class="fav-actions" style="margin-top:10px"><span style="flex:1"></span>${list.length ? `<button class="fav-sub" data-fa="edit">${edit ? '완료' : '편집'}</button>` : ''}<button class="fav-main" data-fa="add">＋ 추가</button></div>`;
+          <div class="fav-actions" style="margin-top:10px"><span style="flex:1"></span>${list.length ? `<button class="fav-sub fav-ic" data-fa="edit" aria-label="${edit ? '편집 끝내기' : '편집'}">${edit ? ICON_CHECK : ICON_PEN}</button>` : ''}<button class="fav-main fav-ic" data-fa="add" aria-label="추가">${ICON_PLUS}</button></div>`;
       };
       $('#mFav').onclick = () => {
         const pn = $('#mFavPanel'), open = pn.classList.toggle('hidden') === false;
