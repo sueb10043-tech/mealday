@@ -183,15 +183,21 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .sw.on{border-color:#111}
 
 .month-nav{display:flex;align-items:center;justify-content:space-between;margin:10px 0 8px}
-.cal-tabs{display:flex;gap:2px;border-bottom:1px solid #ebe9e4;margin:0 -22px 12px;padding:0 14px;overflow-x:auto;scrollbar-width:none}
+.cal-tabs{display:flex;justify-content:center;gap:2px;border-bottom:1px solid #ebe9e4;margin:0 -22px 12px;padding:0 14px;overflow-x:auto;scrollbar-width:none}
 .cal-tabs::-webkit-scrollbar{display:none}
-.cal-tabs button{flex:1 0 auto;padding:10px 8px 9px;font-size:15px;color:#9a9a9e;font-weight:600;border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.cal-tabs button{flex:0 0 auto;padding:10px 12px 9px;text-align:center;font-size:15px;color:#9a9a9e;font-weight:600;border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap}
 .cal-tabs button.on{color:#111;border-bottom-color:#B08D63}
 .cal-sub{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
 .cal-sub button{padding:6px 12px;border-radius:999px;background:#F3F1EC;font-size:13px;color:#555;font-weight:600}
 .cal-sub button.on{background:#111;color:#fff}
 .cv{display:block;max-width:calc(100% - 3px);margin-top:2px;padding:3px 4px;border-radius:7px;font-size:11px;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cv.cvt{white-space:normal;word-break:break-all;overflow:visible;text-overflow:clip;font-size:10px;padding:3px;letter-spacing:-.3px}
+.bv{display:flex;align-items:baseline;margin-top:1px;font-size:9.5px;font-weight:600;color:#5b4630;white-space:nowrap;letter-spacing:-.4px;line-height:1.4}
+.bv i{flex:none;width:10px;font-style:normal;font-size:inherit;font-weight:700;color:#a58b6a;margin-right:2.5px;letter-spacing:0;text-align:left}
+.bv.bx i{width:11px;margin-right:1.5px;font-size:9px}
+.bv small{font-size:inherit;font-weight:500;color:#9a8a76;margin-left:.5px}
+.bv.na{color:#c4bdb2}
+.bv.tight{font-size:8.5px;letter-spacing:-.6px}   /* 10,000보 넘는 날처럼 긴 숫자만 살짝 작게 */
 .cv.cvb{background:#F3EEE6;color:#7a5c38}
 .cv.cve{background:#FDEFE6;color:#D9622B}
 .cv.cvs{background:#E8F1FB;color:#2F6FE0}
@@ -199,12 +205,26 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .cv.cvg{background:#E9F0FB;color:#2F5FB0}
 .cv.cvn{background:#E7F5EC;color:#2E8A55}
 .cal-sum{text-align:center;font-size:15px;color:#333;padding:6px 8px}
+.st-row{display:flex;justify-content:space-between;padding:8px 2px;font-size:15px;color:#333}
+.st-row+.st-row{border-top:1px solid #e6e3dc}
+.cal-key{display:flex;gap:12px;font-size:12px;color:var(--sub);margin:-4px 2px 10px}
+.cal-key i{display:inline-block;width:8px;height:8px;border-radius:3px;margin-right:4px;vertical-align:0}
+.wk-table{width:100%;border-collapse:collapse;font-size:14px}
+.wk-table th,.wk-table td{padding:7px 2px;text-align:right;white-space:nowrap}
+.wk-table thead th{font-size:12px;color:var(--sub);font-weight:600}
+.wk-table thead th small{font-weight:400;margin-left:1px}
+.wk-table tbody th{text-align:left;font-weight:600;color:#555;font-size:13px}
+.wk-table tbody tr+tr th,.wk-table tbody tr+tr td{border-top:1px solid #e6e3dc}
+.wk-table td b{font-weight:700}
+.wk-d{display:inline-block;width:38px;margin-left:3px;font-size:11px;color:var(--sub);text-align:left}
+.wk-d.up{color:#2F6FE0}.wk-d.dn{color:#E5484D}
+.wk-na{color:#bbb}
 .month-nav span{font-size:20px;font-weight:700}
 .month-nav button{width:40px;height:40px;font-size:24px;border-radius:20px;text-align:center}
-.cal{margin:0 -14px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px 2px}
+.cal{margin:0 -18px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px 2px}
 .wd{color:#555;font-weight:600;font-size:13px;text-align:center;padding-bottom:6px}
-.cell{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:4px 0 4px 4px;overflow:visible;min-width:0;border-radius:14px;min-height:66px;border:2px solid transparent}
-.cell .dn{height:32px;display:flex;align-items:center;justify-content:flex-start;gap:0;font-size:15px;color:#111;font-weight:500;white-space:nowrap}
+.cell{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:2px 0 4px 4px;overflow:visible;min-width:0;border-radius:14px;min-height:66px;border:2px solid transparent}
+.cell .dn{height:24px;display:flex;align-items:center;justify-content:flex-start;gap:0;font-size:15px;color:#111;font-weight:500;white-space:nowrap}
 .cell.today{border-color:#C2A27C;background:#FBF7F1}
 .cell.today .dn{font-weight:800}
 .cell.sun .dn{color:#E5484D}
@@ -386,6 +406,7 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 <div id="toast" class="toast"></div>
 <div id="saving" class="saving">저장 중…</div>
 <input type="file" id="photoInput" class="file-in" accept="image/*" multiple>
+<input type="file" id="inbodyInput" class="file-in" accept=".csv,text/csv,text/comma-separated-values">
 
 <script>
 const DEFAULT_SC = 'mealday 동기화';
@@ -411,7 +432,7 @@ function fmtSync(s){ const d = s.slice(0,10), t = s.slice(11,16); return d === t
 
 const S = {
   settings: null, date: todayStr(), day: null, photos: {},
-  ym: todayStr().slice(0,7), tab: 'today', lastSync: '', calTab: lsGet('md_caltab') || 'all', calBody: lsGet('md_calbody') || 'weight',
+  ym: todayStr().slice(0,7), tab: 'today', lastSync: '', calTab: lsGet('md_caltab') || 'all', calBody: 'wt',
   exOpt: null, exUrl: ''
 };
 
@@ -423,7 +444,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-02-50';
+const APP_VERSION = '2026-11-02-55';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -485,6 +506,7 @@ const demoApi = (() => {
         db.states = db.states.filter(x => x.date !== p.date);
         if ((p.labels || []).length) db.states.push({ id:nid(), date:p.date, time:p.time || '', labels:p.labels });
         return true;
+      case 'importBody': { let added = 0, updated = 0; (p.rows || []).forEach(x => { if (db.body[x.date]) updated++; else added++; db.body[x.date] = Object.assign({ date:x.date }, db.body[x.date], { weight:x.weight, bodyFat:x.bodyFat, bmi:x.bmi, muscle:x.muscle }); }); return { added, updated }; }
       case 'saveBody': db.body[p.date] = Object.assign({ date:p.date }, db.body[p.date], { weight:p.weight, bodyFat:p.bodyFat, bmi:p.bmi, muscle:p.muscle, waist1:p.waist1, waist2:p.waist2 }); return db.body[p.date];
       case 'saveWorkout': {
         let w = db.workouts.find(x => x.id === p.id);
@@ -504,7 +526,7 @@ const demoApi = (() => {
         db.states.filter(s => inM(s.date)).forEach(s => { const o = at(s.date); o.states++; s.labels.forEach(l => { if (o.labels.indexOf(l) < 0) o.labels.push(l); }); s.labels.filter(isToilet).forEach(l => { const ic = toiletIcon(l); if (o.toilet.indexOf(ic) < 0) o.toilet.push(ic); }); });
         db.workouts.filter(w => inM(w.date)).forEach(w => at(w.date).workouts.push({ name:w.name, minutes:w.minutes, kcal:w.kcal }));
         Object.values(db.activity).filter(a => inM(a.date)).forEach(a => { at(a.date).steps = a.steps; });
-        Object.values(db.body).filter(b => inM(b.date)).forEach(b => { const o = at(b.date); o.weight = b.weight; o.bodyFat = b.bodyFat; o.muscle = b.muscle; o.waist1 = b.waist1; o.waist2 = b.waist2; o.waist = has(b.waist1) || has(b.waist2) ? 1 : 0; });
+        Object.values(db.body).filter(b => inM(b.date)).forEach(b => { const o = at(b.date); o.weight = b.weight; o.bodyFat = b.bodyFat; o.bmi = b.bmi; o.muscle = b.muscle; o.waist1 = b.waist1; o.waist2 = b.waist2; o.waist = has(b.waist1) || has(b.waist2) ? 1 : 0; });
         return days;
       }
       case 'saveSettings': db.settings = p.settings; return db.settings;
@@ -568,7 +590,9 @@ function bg(promise){   // 미리보기용 / 목록에 못 적는 경우
   return promise.catch(e => { toast('저장하지 못했어요: ' + ((e && e.message) || e)); })
     .finally(() => { pendingSaves--; if (!pendingSaves && !flushing) { $('#saving').classList.remove('show'); loadDay(); } });
 }
+let editSeq = 0;   // 저장할 때마다 1씩 늘려서, 그 전에 출발한 '불러오기' 응답이 방금 입력한 내용을 덮어쓰지 않게 해요
 function send(action, payload){
+  editSeq++;
   if (DEMO) return bg(call(action, payload));
   const q = qLoad(); q.push({ action, payload });
   if (!qSave(q)) return bg(call(action, payload));   // 사진이 너무 커서 못 적으면 바로 보내기
@@ -713,8 +737,10 @@ async function loadDay(afterFlush){
   if (!DEMO && !afterFlush && qLoad().length) { flush(); return; }   // 보낼 게 남았으면 먼저 보내고, 끝나면 최신 기록을 받아와요
   $('#todayBody').style.opacity = S.day && S.day.date === date ? 1 : .5;
   try {
+    const seq = editSeq;
     const d = await call('getDay', { date });
     if (date !== S.date) return;
+    if (seq !== editSeq || qLoad().length) return;   // 그 사이에 새로 입력한 게 있으면 화면을 그대로 둬요 (저장이 끝나면 다시 받아와요)
     S.day = d; if (d.lastSync) S.lastSync = d.lastSync;
     if (!DEMO) lsSet('md_day_' + date, JSON.stringify(d));
     renderToday();
@@ -728,8 +754,9 @@ const fetchedRanges = {};
 async function prefetchRange(from, to, photoDays){
   const key = from + '~' + to; if (fetchedRanges[key]) return; fetchedRanges[key] = 1;
   try {
+    const seq = editSeq;
     const r = await call('getRange', { from, to });
-    if (qLoad().length) return;   // 아직 보낼 기록이 있으면 휴대폰 화면을 덮어쓰지 않아요
+    if (qLoad().length || seq !== editSeq) { delete fetchedRanges[key]; return; }   // 아직 보낼 기록이 있으면 휴대폰 화면을 덮어쓰지 않아요
     for (let d = from; d <= to; d = addDays(d, 1)) {
       const day = Object.assign({ date: d, meals: [], states: [], body: null, activity: null, workouts: [], diary: '' }, r.days[d] || {}, { lastSync: r.lastSync });
       lsSet('md_day_' + d, JSON.stringify(day));
@@ -1374,8 +1401,10 @@ function openDiarySheet(){
 /* ───── 기록(달력) ───── */
 /* 기록 탭: 지난번 받아둔 달력을 바로 보여주고, 그 사이 서버에서 새로 받아 바꿔요 */
 function monthCache(ym){ try { return JSON.parse(lsGet('md_month_' + ym) || 'null'); } catch(e){ return null; } }
+const monthMem = {};   // 주별 평균에서 앞뒤 달 기록도 쓰려고 메모리에 보관
 async function fetchMonth(ym){
   const r = await call('getMonth', { ym });
+  monthMem[ym] = r;
   if (!DEMO) lsSet('md_month_' + ym, JSON.stringify(r));
   return r;
 }
@@ -1397,8 +1426,12 @@ function renderCal(data){
   const wds = ws ? ['월','화','수','목','금','토','일'] : ['일','월','화','수','목','금','토'];
   const offset = (new Date(y, m-1, 1).getDay() - ws + 7) % 7;
   const today = todayStr();
-  const tab = S.calTab || 'all', bm = S.calBody || 'weight';
-  const BODY = { weight: ['체중', 'kg'], bodyFat: ['체지방', '%'], muscle: ['골격근', 'kg'], waist1: ['허리1', 'cm'], waist2: ['허리2', 'cm'] };
+  const tab = S.calTab === 'step' ? 'ex' : (S.calTab || 'all');   // 걸음 탭은 운동 탭으로 합쳤어요
+  // [이름, 단위, 달력에 붙는 글자]
+  const BODY = { weight: ['체중', 'kg', '체'], waist1: ['허리1', 'cm', '1'], waist2: ['허리2', 'cm', '2'],
+                 bodyFat: ['체지방', '%', '체'], muscle: ['골격근', 'kg', '골'], bmi: ['BMI', '', 'b'] };
+  const GROUPS = { wt: ['사이즈', ['weight', 'waist1', 'waist2']], comp: ['체성분', ['bodyFat', 'muscle', 'bmi']] };
+  const bg = GROUPS[S.calBody] ? S.calBody : 'wt', bms = GROUPS[bg][1];
   // 탭별로 날짜 아래에 보여줄 내용
   const detail = info => {
     if (tab === 'state') {
@@ -1408,13 +1441,23 @@ function renderCal(data){
         return `<span class="cv cvt">${esc(l)}</span>`;
       }).join('');
     }
-    if (tab === 'body') return has(info[bm]) ? `<span class="cv cvb mono">${(+info[bm]).toFixed(1)}</span>` : '';
-    if (tab === 'ex') {
-      const ws = info.workouts || []; if (!ws.length) return '';
-      const kcal = ws.reduce((a, w) => a + (+w.kcal || 0), 0), min = ws.reduce((a, w) => a + (+w.minutes || 0), 0);
-      return `<span class="cv cve mono">${kcal ? kcal : min ? min + '분' : '💪'}</span>`;   // 숫자 = 칼로리(kcal)
+    if (tab === 'body') {
+      // 체성분은 그날 하나라도 기록이 있으면 빠진 항목을 '-'로 보여줘요 (나중에 채워 넣을 수 있게)
+      const any = bms.some(k => has(info[k]));
+      if (!any) return '';
+      return bms.filter(k => has(info[k]) || bg === 'comp').map(k => has(info[k])
+        ? `<span class="bv mono"><i>${BODY[k][2]}</i>${(+info[k]).toFixed(1)}${BODY[k][1] ? `<small>${BODY[k][1]}</small>` : ''}</span>`
+        : `<span class="bv na"><i>${BODY[k][2]}</i>-</span>`).join('');
     }
-    if (tab === 'step') return has(info.steps) && +info.steps > 0 ? `<span class="cv cvs mono">${Number(info.steps).toLocaleString('ko-KR')}</span>` : '';
+    if (tab === 'ex') {
+      // 운동(소모 칼로리) + 걸음을 한 칸에: 💪 299kcal / 👟 7085보
+      const ws = info.workouts || [], kcal = ws.reduce((a, w) => a + (+w.kcal || 0), 0), st = +info.steps || 0;
+      let h = '';
+      if (!ws.length && st > 0) h += '<span class="bv bx">&nbsp;</span>';   // 운동 안 한 날: 첫 줄은 비워 두고 걸음은 둘째 줄 그대로
+      if (ws.length) h += kcal ? `<span class="bv bx mono${kcal >= 1000 ? ' tight' : ''}"><i>💪</i>${kcal}<small>kcal</small></span>` : `<span class="bv bx na"><i>💪</i>-</span>`;
+      if (st > 0) h += `<span class="bv bx mono${st >= 10000 ? ' tight' : ''}"><i>👟</i>${st}<small>보</small></span>`;
+      return h;
+    }
     return '';
   };
   let cells = '';
@@ -1436,37 +1479,106 @@ function renderCal(data){
   const keys = data ? Object.keys(data).filter(k => k.indexOf(S.ym) === 0).sort() : [];
   let below = '';
   if (!data) below = '<div class="chart"><p class="empty" style="text-align:center">불러오는 중…</p></div>';
-  else if (tab === 'all') below = `<div class="cal-legend"><span><i class="cd-good"></i>배변 좋음</span><span><i class="cd-bad"></i>배변 나쁨</span></div>
-    <div class="set-label">이번 달 운동</div><div class="chart">${workoutSummary(data)}</div>`;
+  else if (tab === 'all') below = `<div class="set-label">이번 달 운동</div><div class="chart">${workoutSummary(data)}</div>`;
   else if (tab === 'state') {
     let good = 0, bad = 0; const cnt = {};
     keys.forEach(k => (data[k].labels || []).forEach(l => {
       if (isToilet(l)) { if (toiletIcon(l) === '👎') bad++; else good++; } else cnt[l] = (cnt[l] || 0) + 1;
     }));
-    const etc = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).map(l => `${esc(l)} ${cnt[l]}일`).join(' · ');
-    below = `<div class="chart"><div class="cal-sum">💩👍 <b>${good}일</b> · 💩👎 <b>${bad}일</b>${etc ? `<br><span style="color:var(--sub);font-size:14px">${etc}</span>` : ''}</div></div>`;
-  } else if (tab === 'body') {
-    const vs = keys.filter(k => has(data[k][bm])).map(k => +data[k][bm]);
-    const u = BODY[bm][1];
-    below = `<div class="chart"><div class="cal-sum">${vs.length >= 2
-      ? `${BODY[bm][0]} 처음 <b>${vs[0].toFixed(1)}${u}</b> → 마지막 <b>${vs[vs.length - 1].toFixed(1)}${u}</b> (${(vs[vs.length - 1] - vs[0] >= 0 ? '+' : '') + (vs[vs.length - 1] - vs[0]).toFixed(1)}${u})`
-      : vs.length ? `${BODY[bm][0]} <b>${vs[0].toFixed(1)}${u}</b> (이번 달 1번 기록)` : `이번 달 ${BODY[bm][0]} 기록이 없어요.`}</div></div>`;
-  } else if (tab === 'ex') {
-    let kc = 0; keys.forEach(k => (data[k].workouts || []).forEach(w => kc += +w.kcal || 0));
-    below = `<div class="chart">${workoutSummary(data)}${kc ? `<div class="cal-sum" style="padding-top:0">이번 달 운동 총 <b>${kc.toLocaleString('ko-KR')}kcal</b><br><span style="color:var(--sub);font-size:13px">달력 숫자는 그날 운동 칼로리(kcal)예요</span></div>` : ''}</div>`;
-  }
-  else if (tab === 'step') {
+    const lines = [['💩👍', good], ['💩👎', bad]].concat(Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).map(l => [esc(l), cnt[l]]));
+    below = `<div class="chart" style="padding:8px 16px">${lines.map(([n, c]) => `<div class="st-row"><span>${n}</span><b>${c}일</b></div>`).join('')}</div>`;
+  } else if (tab === 'body') below = weeklyBodyHtml(data, y, m, ws, bms, BODY); else if (tab === 'ex') {
+    let kc = 0, exDays = 0; keys.forEach(k => { const w = data[k].workouts || []; if (w.length) exDays++; w.forEach(x => kc += +x.kcal || 0); });
     const vs = keys.filter(k => +data[k].steps > 0).map(k => +data[k].steps);
     const avg = vs.length ? Math.round(vs.reduce((a, b) => a + b, 0) / vs.length) : 0;
-    below = `<div class="chart"><div class="cal-sum">${vs.length ? `하루 평균 <b>${avg.toLocaleString('ko-KR')}걸음</b> · 최고 <b>${Math.max(...vs).toLocaleString('ko-KR')}걸음</b>` : '이번 달 걸음 기록이 없어요.'}</div></div>`;
+    const n = v => v.toLocaleString('ko-KR');
+    below = `<div class="chart" style="padding:8px 16px">
+      <div class="st-row"><span>💪 운동한 날</span><b>${exDays}일</b></div>
+      <div class="st-row"><span>💪 소모 칼로리 합계</span><b>${n(kc)}kcal</b></div>
+      <div class="st-row"><span>👟 하루 평균 걸음</span><b>${vs.length ? n(avg) + '보' : '-'}</b></div>
+      <div class="st-row"><span>👟 가장 많이 걸은 날</span><b>${vs.length ? n(Math.max(...vs)) + '보' : '-'}</b></div></div>`;
   }
-  const TABS = [['all', '전체'], ['state', '상태'], ['body', '신체'], ['ex', '운동'], ['step', '걸음']];
+  const TABS = [['all', '전체'], ['body', '신체'], ['state', '상태'], ['ex', '운동']];
   $('#view-cal').innerHTML = `
     <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월</span><button data-act="mnext">›</button></div>
     <div class="cal-tabs">${TABS.map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-ctab="${k}">${n}</button>`).join('')}</div>
-    ${tab === 'body' ? `<div class="cal-sub">${Object.keys(BODY).map(k => `<button class="${bm === k ? 'on' : ''}" data-cbody="${k}">${BODY[k][0]}</button>`).join('')}</div>` : ''}
+    ${tab === 'body' ? `<div class="cal-sub">${Object.keys(GROUPS).map(k => `<button class="${bg === k ? 'on' : ''}" data-cbody="${k}">${GROUPS[k][0]}</button>`).join('')}</div>` : ''}
     <div class="cal">${wds.map(w => `<div class="wd${w === '일' ? ' sun' : w === '토' ? ' sat' : ''}">${w}</div>`).join('')}${cells}</div>
     ${below}`;
+}
+/* 신체 탭 아래: 주별 평균 + 전주 대비 변화 (앞뒤 달 기록도 함께 써요) */
+/* 인바디 CSV → 날짜별 { weight, bodyFat, bmi, muscle } */
+function parseInBody(text){
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const head = lines[0].split(',').map(h => h.trim());
+  const col = name => head.findIndex(h => h.indexOf(name) === 0);
+  const ci = { date: col('날짜'), weight: col('체중'), muscle: col('골격근량'), bmi: col('BMI'), bodyFat: col('체지방률') };
+  if (ci.date < 0 || ci.weight < 0) throw new Error('인바디 CSV 형식이 아니에요');
+  const byDate = {};
+  lines.slice(1).forEach(l => {
+    const c = l.split(',').map(v => v.trim());
+    const raw = (c[ci.date] || '').replace(/\D/g, '');
+    if (raw.length < 8) return;
+    const date = raw.slice(0, 4) + '-' + raw.slice(4, 6) + '-' + raw.slice(6, 8);
+    const time = raw.length >= 12 ? raw.slice(8, 10) + ':' + raw.slice(10, 12) : '';
+    const v = k => { const x = ci[k] >= 0 ? c[ci[k]] : ''; return x && x !== '-' && !isNaN(+x) ? String(+x) : ''; };
+    const row = { date, time, weight: v('weight'), bodyFat: v('bodyFat'), bmi: v('bmi'), muscle: v('muscle') };
+    if (!byDate[date] || (time && time < byDate[date].time)) byDate[date] = row;   // 하루 중 가장 이른 측정
+  });
+  return Object.keys(byDate).sort().map(d => byDate[d]);
+}
+async function onInBodyPicked(e){
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  try {
+    const rows = parseInBody(await f.text());
+    if (!rows.length) { toast('가져올 기록이 없어요'); return; }
+    toast(`${rows.length}일치 인바디 기록을 넣는 중…`);
+    const r = await call('importBody', { rows });
+    // 저장된 달력·하루 기록을 새로 받아오도록 비워요
+    try { Object.keys(localStorage).forEach(k => { if (/^md_(month|day)_/.test(k)) localStorage.removeItem(k); }); } catch(err){}
+    Object.keys(monthMem).forEach(k => delete monthMem[k]); S.calData = null;
+    Object.keys(fetchedRanges).forEach(k => delete fetchedRanges[k]);
+    toast(`인바디 기록 ${r.added + r.updated}일치를 넣었어요 (새로 ${r.added} · 바뀜 ${r.updated})`);
+  } catch(err){ fail(err); }
+}
+function weeklyBodyHtml(data, y, m, ws, bms, BODY){
+  const all = {};
+  const p = new Date(y, m - 2, 1), n = new Date(y, m, 1);
+  [p.getFullYear() + '-' + pad(p.getMonth() + 1), n.getFullYear() + '-' + pad(n.getMonth() + 1)]
+    .forEach(ym => Object.assign(all, monthMem[ym] || monthCache(ym) || {}));
+  Object.assign(all, data);
+  // 이번 달 1일이 들어있는 주부터 말일이 들어있는 주까지 + 비교용으로 그 앞 주 하나
+  const first = new Date(y, m - 1, 1);
+  let st = new Date(y, m - 1, 1 - ((first.getDay() - ws + 7) % 7) - 7);
+  const end = new Date(y, m, 0);
+  const weeks = [];
+  while (st <= end) {
+    const ds = [];
+    for (let i = 0; i < 7; i++) { const d = new Date(st.getFullYear(), st.getMonth(), st.getDate() + i); ds.push(ymd(d)); }
+    const avg = {};
+    bms.forEach(k => { const vs = ds.filter(d => all[d] && has(all[d][k])).map(d => +all[d][k]); avg[k] = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null; });
+    weeks.push({ from: ds[0], to: ds[6], avg });
+    st = new Date(st.getFullYear(), st.getMonth(), st.getDate() + 7);
+  }
+  const md = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  const rows = weeks.slice(1).map((w, i) => {
+    const prev = weeks[i];
+    const cells = bms.map(k => {
+      const v = w.avg[k], pv = prev.avg[k];
+      if (v == null) return '<td class="wk-na">—</td>';
+      let ch = '<span class="wk-d"></span>';   // 비교할 전주가 없어도 같은 폭을 비워 둬서 숫자 줄을 맞춰요
+      if (pv != null) {
+        const dlt = Math.round((v - pv) * 10) / 10;
+        const good = k === 'muscle' ? dlt > 0 : dlt < 0;
+        ch = dlt === 0 ? '<span class="wk-d">0.0</span>' : `<span class="wk-d ${good ? 'up' : 'dn'}">${dlt > 0 ? '▲' : '▼'}${Math.abs(dlt).toFixed(1)}</span>`;
+      }
+      return `<td><b>${v.toFixed(1)}</b>${ch}</td>`;
+    }).join('');
+    return `<tr><th>${md(w.from)}~${md(w.to)}</th>${cells}</tr>`;
+  }).join('');
+  return `<div class="set-label">주별 평균 <span style="font-weight:500;color:var(--sub);font-size:12px">· 오른쪽 작은 숫자는 전주 대비</span></div>
+    <div class="chart" style="padding:10px 12px"><table class="wk-table"><thead><tr><th></th>${bms.map(k => `<th>${BODY[k][0]}<small>${BODY[k][1]}</small></th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 /* ───── 변화 탭 ───── */
 function renderChg(data){
@@ -1542,6 +1654,10 @@ function renderSet(){
       ${(S.schoolResults || []).length ? `<div class="school-res">${S.schoolResults.map((r, i) => `<button class="field" data-act="school-pick" data-i="${i}"><span>${esc(r.name)}</span><small>${esc(r.office)} · ${esc(r.addr)}</small></button>`).join('')}</div>` : ''}
     </div>
     <p class="hint">학교를 고르면 식사 입력 창의 사진 추가 옆에 '급식' 버튼이 생겨요. 누르면 그날 점심 메뉴가 메모에 들어가요.</p>
+
+    <div class="set-label">인바디 기록 가져오기</div>
+    <div class="group"><button class="field link" data-act="inbody">인바디 CSV 파일 고르기</button></div>
+    <p class="hint">인바디 앱에서 내보낸 CSV 파일을 고르면 날짜별 체중·체지방률·골격근량·BMI가 한 번에 들어가요. 같은 날짜는 인바디 값으로 바꾸고, 허리 치수는 그대로 둬요. 하루에 여러 번 쟀으면 그날 가장 이른 측정값을 써요.</p>
 
     <div class="set-label">건강 앱 동기화</div>
     <div class="group"><div class="field"><span>단축어 이름</span><input id="scName" class="plain" value="${esc(st.shortcutName || DEFAULT_SC)}"></div></div>
@@ -1842,12 +1958,14 @@ function setTab(tab){
   window.scrollTo(0, 0);
   if (!S.settings) return;
   if (tab === 'today') loadDay();
+  if (tab === 'cal') S.calBody = 'wt';   // 신체 탭 안에서는 늘 '사이즈'부터
   if (tab === 'cal' || tab === 'chg') { S.ym = S.date.slice(0, 7); loadMonth(); }
   if (tab === 'set') renderSet();
 }
 
 function bind(){
   document.querySelectorAll('.tabbar button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+  $('#inbodyInput').addEventListener('change', onInBodyPicked);
   $('#prevDay').onclick = () => { S.date = addDays(S.date, -1); loadDay(); };
   $('#nextDay').onclick = () => { S.date = addDays(S.date, 1); loadDay(); };   // 미래 날짜도 이동 가능 (급식 미리 보기)
   $('#todayBtn').onclick = () => { S.date = todayStr(); loadDay(); };
@@ -1873,9 +1991,9 @@ function bind(){
 
   $('#view-cal').addEventListener('click', e => {
     const ct = e.target.closest('[data-ctab]');
-    if (ct) { S.calTab = ct.dataset.ctab; lsSet('md_caltab', S.calTab); renderCal(monthCache(S.ym)); return; }
+    if (ct) { S.calTab = ct.dataset.ctab; lsSet('md_caltab', S.calTab); S.calBody = 'wt'; renderCal(monthCache(S.ym)); return; }
     const cb = e.target.closest('[data-cbody]');
-    if (cb) { S.calBody = cb.dataset.cbody; lsSet('md_calbody', S.calBody); renderCal(monthCache(S.ym)); return; }
+    if (cb) { S.calBody = cb.dataset.cbody; renderCal(monthCache(S.ym)); return; }
     const cell = e.target.closest('[data-date]');
     if (cell) { S.date = cell.dataset.date; setTab('today'); return; }
     const el = e.target.closest('[data-act]'); if (!el) return;
@@ -1900,6 +2018,7 @@ function bind(){
       switch (el.dataset.act) {
         case 'tag': openTagSheet(st.tags.find(t => t.id === el.dataset.id)); break;
         case 'tag-new': openTagSheet(); break;
+        case 'inbody': { const fi = $('#inbodyInput'); fi.value = ''; fi.click(); break; }
         case 'back': setTab('today'); break;
         case 'connect': openConnectSheet(); break;
         case 'chip': openChipSheet(+el.dataset.i); break;
