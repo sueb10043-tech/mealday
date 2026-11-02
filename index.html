@@ -183,9 +183,9 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .sw.on{border-color:#111}
 
 .month-nav{display:flex;align-items:center;justify-content:space-between;margin:10px 0 8px}
-.cal-tabs{display:flex;justify-content:center;gap:2px;border-bottom:1px solid #ebe9e4;margin:0 -22px 12px;padding:0 14px;overflow-x:auto;scrollbar-width:none}
+.cal-tabs{display:flex;justify-content:stretch;gap:0;border-bottom:1px solid #ebe9e4;margin:0 -22px 12px;padding:0 14px;overflow-x:auto;scrollbar-width:none}
 .cal-tabs::-webkit-scrollbar{display:none}
-.cal-tabs button{flex:0 0 auto;padding:10px 12px 9px;text-align:center;font-size:15px;color:#9a9a9e;font-weight:600;border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.cal-tabs button{flex:1 1 0;min-width:0;padding:10px 4px 9px;text-align:center;font-size:15px;color:#9a9a9e;font-weight:600;border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap}
 .cal-tabs button.on{color:#111;border-bottom-color:#B08D63}
 .cal-sub{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
 .cal-sub button{padding:6px 12px;border-radius:999px;background:#F3F1EC;font-size:13px;color:#555;font-weight:600}
@@ -446,7 +446,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-02-57';
+const APP_VERSION = '2026-11-02-58';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
