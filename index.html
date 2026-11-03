@@ -519,7 +519,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-03-93';
+const APP_VERSION = '2026-11-03-95';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -616,6 +616,11 @@ const demoApi = (() => {
         db.activity[p.date] = Object.assign({ date:p.date }, db.activity[p.date], { water:String(log.reduce((a, n) => a + n, 0)), waterLog:log.join(',') });
         return true;
       }
+      case 'getAllMonths': {
+        const out = {}, yms = new Set(Object.keys(db.body).concat(Object.keys(db.activity), db.workouts.map(w => w.date), db.states.map(x => x.date)).map(d => d.slice(0, 7)));
+        yms.forEach(ym => { out[ym] = demoApi('getMonth', { ym }); });
+        return out;
+      }
       case 'getMonth': {
         const days = {}, at = d => (days[d] = days[d] || { meals:0, states:0, toilet:[], labels:[], workouts:[] }), inM = d => d.indexOf(p.ym) === 0;
         db.meals.filter(m => inM(m.date)).forEach(m => at(m.date).meals++);
@@ -711,6 +716,13 @@ async function flush(){
         const q2 = qLoad(); if (!q2.length) break;
         q2[0].tries = (q2[0].tries || 0) + 1;
         const msg = (e && e.message) || e;
+        // 서버(Code.gs)가 아직 옛 버전이라 모르는 요청이면 버리지 않고 맨 뒤로 보내 둬요 → 새 버전 배포 후 다음에 열 때 저장돼요
+        if (/알 수 없는 요청/.test(msg)) {
+          const it = q2.shift(); it.tries = 0; q2.push(it); qSave(q2);
+          toast('서버(Code.gs)를 새 버전으로 배포하면 저장돼요');
+          if (q2.every(x => /알 수 없는 요청/.test(x.lastErr || '') || x === it)) { it.lastErr = msg; qSave(q2); break; }
+          it.lastErr = msg; qSave(q2); continue;
+        }
         if (q2[0].tries >= 3) { q2.shift(); qSave(q2); toast('저장하지 못한 기록이 있어요: ' + msg); continue; }
         qSave(q2);
         toast('아직 저장하지 못했어요. 다음에 다시 보낼게요');
@@ -1695,7 +1707,7 @@ function renderCal(data){
   const wds = ws ? ['월','화','수','목','금','토','일'] : ['일','월','화','수','목','금','토'];
   const offset = (new Date(y, m-1, 1).getDay() - ws + 7) % 7;
   const today = todayStr();
-  const tab = S.calTab === 'step' ? 'ex' : (S.calTab || 'all');   // 걸음 탭은 운동 탭으로 합쳤어요
+  const tab = S.calTab === 'step' ? 'ex' : S.calTab === 'state' ? 'all' : (S.calTab || 'all');   // 걸음 탭은 운동으로 합치고, 상태 탭은 없앴어요
   // [이름, 단위, 달력에 붙는 글자]
   const BODY = { weight: ['체중', 'kg', '체'], waist1: ['허리1', 'cm', '1'], waist2: ['허리2', 'cm', '2'],
                  bodyFat: ['체지방', '%', '체'], muscle: ['골격근', 'kg', '골'], bmi: ['BMI', '', 'b'] };
@@ -1781,7 +1793,7 @@ function renderCal(data){
       <div class="st-row"><span>👟 하루 평균 걸음</span><b>${vs.length ? n(avg) + '보' : '-'}</b></div>
       <div class="st-row"><span>👟 가장 많이 걸은 날</span><b>${vs.length ? n(Math.max(...vs)) + '보' : '-'}</b></div></div>`;
   }
-  const TABS = [['all', '전체'], ['body', '신체'], ['state', '상태'], ['ex', '운동']];
+  const TABS = [['all', '전체'], ['body', '신체'], ['ex', '운동']];
   $('#view-cal').innerHTML = `
     <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월</span><button data-act="mnext">›</button></div>
     <div class="cal-tabs">${TABS.map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-ctab="${k}">${n}</button>`).join('')}</div>
@@ -1887,25 +1899,25 @@ const chgPoints = {};   // 카드별 점 (누르면 값 보기용)
 let chgJob = 0;
 // 기록 전부를 한 번 모아 두고(S.chgAll), 기간·확대축소는 그 안에서 잘라 그려요
 async function renderChg(){
-  const job = ++chgJob, to = todayStr();
-  if (!S.chgAll) $('#view-chg').innerHTML = chgHead() + '<div class="chart"><p class="empty" style="text-align:center">불러오는 중…</p></div>';
-  else drawChg();
-  const all = {};
-  // 이번 달은 늘 새로 받아요(방금 입력한 값 반영), 지난 달은 저장본 사용
-  const getM = async ym => { let m = ym === to.slice(0, 7) ? null : (monthMem[ym] || monthCache(ym)); if (!m) { try { m = await fetchMonth(ym); } catch(e){ m = monthMem[ym] || monthCache(ym) || {}; } } return m || {}; };
-  const prevYm = ym => { const p = ym.split('-').map(Number), d = new Date(p[0], p[1] - 2, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
-  const hasBody = m => Object.keys(m).some(d => ['weight', 'bodyFat', 'muscle', 'waist1', 'waist2', 'bmi', 'steps'].some(k => has(m[d][k])) || (m[d].workouts || []).length);
-  // 이번 달부터 거꾸로 3달씩 받아서, 기록 없는 달이 3번 이어지면 멈춰요 (최대 5년)
-  let ym = to.slice(0, 7), empty = 0, n = 0;
-  while (empty < 3 && n < 60) {
-    const batch = []; for (let i = 0; i < 3; i++) { batch.push(ym); ym = prevYm(ym); n++; }
-    const ms = await Promise.all(batch.map(getM));
-    if (job !== chgJob) return;
-    ms.forEach(m => { if (hasBody(m)) { empty = 0; Object.assign(all, m); } else empty++; });
+  const job = ++chgJob;
+  // ① 휴대폰에 저장된 달들로 바로 그려요 (기다림 없음)
+  if (!S.chgAll) {
+    const all = {};
+    try { Object.keys(localStorage).filter(k => /^md_month_\d{4}-\d{2}$/.test(k)).forEach(k => Object.assign(all, monthCache(k.slice(9)) || {})); } catch(e){}
+    Object.keys(monthMem).forEach(ym => Object.assign(all, monthMem[ym] || {}));
+    if (Object.keys(all).length) S.chgAll = all;
   }
-  if (job !== chgJob) return;
-  S.chgAll = all;
-  if (S.tab === 'chg') drawChg();
+  if (S.chgAll) drawChg();
+  else $('#view-chg').innerHTML = chgHead() + '<div class="chart"><p class="empty" style="text-align:center">불러오는 중…</p></div>';
+  // ② 서버에서 기록 전체를 한 번에 받아 최신으로 고쳐 그려요 (달마다 따로 묻지 않아요)
+  try {
+    const byYm = await call('getAllMonths', {});
+    if (job !== chgJob) return;
+    const all = {};
+    Object.keys(byYm || {}).forEach(ym => { monthMem[ym] = byYm[ym]; if (!DEMO) lsSet('md_month_' + ym, JSON.stringify(byYm[ym])); Object.assign(all, byYm[ym]); });
+    S.chgAll = all;
+    if (S.tab === 'chg') drawChg();
+  } catch(e){ if (!S.chgAll) fail(e); }
 }
 function chgHead(){
   const span = S.chg.span, P = CHG_PERIODS.find(x => x[2] === (span || 0));
@@ -1929,9 +1941,17 @@ function drawChg(){
   const g = S.chg.group;
   if (g !== 'act') {
     const keys = Object.keys(CHG_METRICS).filter(k => g === 'all' || CHG_METRICS[k].g === g);
-    body += keys.map(k => chgCard(k, days.filter(d => has(all[d][k])).map(d => ({ d, v: +all[d][k] })), from, to)).join('');
+    body += keys.map(k => {
+      const pts = days.filter(d => has(all[d][k])).map(d => ({ d, v: +all[d][k] }));
+      // 기간 '전체'일 때는 항목마다 자기 첫 기록부터 그려요 (허리처럼 늦게 시작한 항목도 변화가 잘 보이게)
+      const f = !S.chg.span && pts.length ? pts[0].d : from;
+      return chgCard(k, pts, f, to);
+    }).join('');
   }
-  if (g === 'all' || g === 'act') body += chgActivity(all, days, from, to);
+  if (g === 'all' || g === 'act') {
+    const actDays = days.filter(d => +all[d].steps > 0 || (all[d].workouts || []).length);
+    body += chgActivity(all, days, !S.chg.span && actDays.length ? actDays[0] : from, to);
+  }
   $('#view-chg').innerHTML = chgHead() + body;
   const md = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
   $('#chgRange').textContent = `${md(from)} ~ ${md(to)} · ${dayNum(to) - dayNum(from) + 1}일`;
