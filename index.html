@@ -207,6 +207,7 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .cal-tabs::-webkit-scrollbar{display:none}
 .cal-tabs button{flex:1 1 0;min-width:0;padding:10px 4px 9px;text-align:center;font-size:15px;color:#9a9a9e;font-weight:600;border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap}
 .cal-tabs button.on{color:#111;border-bottom-color:#B08D63}
+.cal-tabs-div{flex:none;width:1px;background:#dcd8d0;margin:9px 2px}   /* 전체 | 나머지 구분선 */
 .cal-sub{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
 .cal-sub button{padding:6px 12px;border-radius:999px;background:#F3F1EC;font-size:13px;color:#555;font-weight:600}
 .cal-sub button.on{background:#111;color:#fff}
@@ -519,7 +520,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-03-95';
+const APP_VERSION = '2026-11-03-96';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1707,12 +1708,15 @@ function renderCal(data){
   const wds = ws ? ['월','화','수','목','금','토','일'] : ['일','월','화','수','목','금','토'];
   const offset = (new Date(y, m-1, 1).getDay() - ws + 7) % 7;
   const today = todayStr();
-  const tab = S.calTab === 'step' ? 'ex' : S.calTab === 'state' ? 'all' : (S.calTab || 'all');   // 걸음 탭은 운동으로 합치고, 상태 탭은 없앴어요
+  // 탭: 전체 | 사이즈 | 체성분 | 운동  (예전 '신체' 탭은 사이즈로, '상태'는 전체로, '걸음'은 운동으로)
+  const raw = { step: 'ex', state: 'all', body: 'size' }[S.calTab] || S.calTab || 'all';
+  const ctab = ['all', 'size', 'comp', 'ex'].indexOf(raw) >= 0 ? raw : 'all';
+  const tab = ctab === 'size' || ctab === 'comp' ? 'body' : ctab;
   // [이름, 단위, 달력에 붙는 글자]
   const BODY = { weight: ['체중', 'kg', '체'], waist1: ['허리1', 'cm', '1'], waist2: ['허리2', 'cm', '2'],
                  bodyFat: ['체지방', '%', '체'], muscle: ['골격근', 'kg', '골'], bmi: ['BMI', '', 'b'] };
   const GROUPS = { wt: ['사이즈', ['weight', 'waist1', 'waist2']], comp: ['체성분', ['bodyFat', 'muscle', 'bmi']] };
-  const bg = GROUPS[S.calBody] ? S.calBody : 'wt', bms = GROUPS[bg][1];
+  const bg = ctab === 'comp' ? 'comp' : 'wt', bms = GROUPS[bg][1];
   // 탭별로 날짜 아래에 보여줄 내용
   const detail = info => {
     if (tab === 'state') {
@@ -1793,11 +1797,10 @@ function renderCal(data){
       <div class="st-row"><span>👟 하루 평균 걸음</span><b>${vs.length ? n(avg) + '보' : '-'}</b></div>
       <div class="st-row"><span>👟 가장 많이 걸은 날</span><b>${vs.length ? n(Math.max(...vs)) + '보' : '-'}</b></div></div>`;
   }
-  const TABS = [['all', '전체'], ['body', '신체'], ['ex', '운동']];
+  const TABS = [['all', '전체'], ['size', '사이즈'], ['comp', '체성분'], ['ex', '운동']];
   $('#view-cal').innerHTML = `
     <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월</span><button data-act="mnext">›</button></div>
-    <div class="cal-tabs">${TABS.map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-ctab="${k}">${n}</button>`).join('')}</div>
-    ${tab === 'body' ? `<div class="cal-sub">${Object.keys(GROUPS).map(k => `<button class="${bg === k ? 'on' : ''}" data-cbody="${k}">${GROUPS[k][0]}</button>`).join('')}</div>` : ''}
+    <div class="cal-tabs">${TABS.map(([k, n], i) => `<button class="${ctab === k ? 'on' : ''}" data-ctab="${k}">${n}</button>${i === 0 ? '<span class="cal-tabs-div"></span>' : ''}`).join('')}</div>
     <div class="cal">${wds.map(w => `<div class="wd${w === '일' ? ' sun' : w === '토' ? ' sat' : ''}">${w}</div>`).join('')}</div>
     <div class="cal cal-body">${cells}</div>
     ${below}`;
@@ -2627,7 +2630,7 @@ function bind(){
             const r = await call('importSheet', {});
             if (r.error) toast(r.error);
             else if (r.created) toast("시트에 '일괄입력' 탭을 만들었어요. 채운 뒤 다시 눌러 주세요");
-            else if (r.empty || !r.rows) toast('새로 반영할 줄이 없어요');
+            else if (r.empty || (!r.rows && !r.workouts)) toast('새로 반영할 줄이 없어요');
             else { clearDataCaches(); toast(`${r.rows}줄 반영 (신체 ${r.body}일 · 상태 ${r.states}일 · 운동 ${r.workouts}개 · 걸음 ${r.steps || 0}일)${r.bad.length ? ` · 날짜 오류 ${r.bad.length}줄` : ''}`); }
           } catch(err){ fail(err); }
           finally { el.disabled = false; el.textContent = '일괄입력 탭 반영하기'; }
