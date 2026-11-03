@@ -88,6 +88,10 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{display:inline-flex;align-items:center;gap:4px;padding:9px 16px;border:1.5px solid #dcdcdc;border-radius:999px;font-size:16px;background:#fff}
 .chip.sm{padding:4px 11px;font-size:14px;border-width:1px}
+.chip .ct{font-size:12px;color:#8a7a66;margin-left:5px;font-weight:500}
+.t-rows{margin:12px 0 0;padding:0 16px 14px;border-top:1px solid #eee}
+.t-row{display:flex;align-items:center;justify-content:space-between;padding:10px 2px 0;font-size:15px}
+.t-row input[type=time]{border:0;background:#ececec;border-radius:10px;padding:6px 8px;font-size:15px;min-height:34px;-webkit-appearance:none;appearance:none;width:120px}
 .chip.on{background:#111;color:#fff;border-color:#111}
 .chip.add{border-style:dashed;color:var(--sub)}
 .chip.toilet{background:#F3ECE4;border-color:#F3ECE4}
@@ -209,6 +213,7 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .cv.cvs{background:#E8F1FB;color:#2F6FE0}
 .cv.cvt{background:#F1F1EF;color:#444;font-weight:500}
 .cv.cvg{background:#E9F0FB;color:#2F5FB0}
+.cv .cnt{font-size:10px;margin-left:1px;font-weight:700}
 .cv.cvn{background:#E7F5EC;color:#2E8A55}
 .cal-sum{text-align:center;font-size:15px;color:#333;padding:6px 8px}
 .st-row{display:flex;justify-content:space-between;padding:8px 2px;font-size:15px;color:#333}
@@ -461,7 +466,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-02-65';
+const APP_VERSION = '2026-11-03-69';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -493,7 +498,7 @@ const demoApi = (() => {
     db.activity[d] = { date:d, steps: String(4200 + ((i * 1777) % 6000)), water: '', waterLog: [[300, 500], [500, 300, 300], [300, 300, 500, 100]][i % 3].join(',') };
     db.activity[d].water = String(db.activity[d].waterLog.split(',').reduce((a, n) => a + +n, 0));
     const lb = [['💩👍'], ['💩👎', '더부룩함'], ['가스참'], ['💩👍']][i % 4];
-    db.states.push({ id:nid(), date:d, time:'21:00', labels: lb });
+    db.states.push({ id:nid(), date:d, time:'07:50', labels: lb });
     if (i % 3 === 0) db.workouts.push({ id:nid(), date:d, time:'', name:'운동', minutes:80, source:'health' });
     if (i % 3 === 1) db.workouts.push({ id:nid(), date:d, time:'12:44', name:'전신근력운동', minutes:44, kcal:131, source:'edited' }, { id:nid(), date:d, time:'13:28', name:'걷기', minutes:36, kcal:168, source:'edited' });
   }
@@ -521,9 +526,15 @@ const demoApi = (() => {
       case 'getPhotos': { const o = {}; (p.ids || []).forEach(id => { if (db.photos[id]) o[id] = db.photos[id]; }); return o; }
       case 'saveDayState':
         db.states = db.states.filter(x => x.date !== p.date);
-        if ((p.labels || []).length) db.states.push({ id:nid(), date:p.date, time:p.time || '', labels:p.labels });
+        if (p.toilets) {
+          const others = (p.labels || []).filter(l => !isToilet(l));
+          if (others.length) db.states.push({ id:nid(), date:p.date, time:'', labels:others });
+          p.toilets.forEach(t => db.states.push({ id:nid(), date:p.date, time:t.time, labels:[t.label] }));
+        } else if ((p.labels || []).length) db.states.push({ id:nid(), date:p.date, time:p.time || '', labels:p.labels });
         return true;
       case 'importSheet': return { rows: 0, empty: true };
+      case 'saveState': { db.states = db.states.filter(x => x.id !== p.id); db.states.push({ id:p.id, date:p.date, time:p.time || '', labels:p.labels || [] }); return true; }
+      case 'deleteState': db.states = db.states.filter(x => x.id !== p.id); return true;
       case 'importBody': { let added = 0, updated = 0; (p.rows || []).forEach(x => { if (db.body[x.date]) updated++; else added++; db.body[x.date] = Object.assign({ date:x.date }, db.body[x.date], { weight:x.weight, bodyFat:x.bodyFat, bmi:x.bmi, muscle:x.muscle }); }); return { added, updated }; }
       case 'saveBody': db.body[p.date] = Object.assign({ date:p.date }, db.body[p.date], { weight:p.weight, bodyFat:p.bodyFat, bmi:p.bmi, muscle:p.muscle, waist1:p.waist1, waist2:p.waist2 }); return db.body[p.date];
       case 'saveWorkout': {
@@ -541,7 +552,7 @@ const demoApi = (() => {
       case 'getMonth': {
         const days = {}, at = d => (days[d] = days[d] || { meals:0, states:0, toilet:[], labels:[], workouts:[] }), inM = d => d.indexOf(p.ym) === 0;
         db.meals.filter(m => inM(m.date)).forEach(m => at(m.date).meals++);
-        db.states.filter(s => inM(s.date)).forEach(s => { const o = at(s.date); o.states++; s.labels.forEach(l => { if (o.labels.indexOf(l) < 0) o.labels.push(l); }); s.labels.filter(isToilet).forEach(l => { const ic = toiletIcon(l); if (o.toilet.indexOf(ic) < 0) o.toilet.push(ic); }); });
+        db.states.filter(s => inM(s.date)).forEach(s => { const o = at(s.date); o.states++; s.labels.forEach(l => o.labels.push(l)); s.labels.filter(isToilet).forEach(l => { const ic = toiletIcon(l); if (o.toilet.indexOf(ic) < 0) o.toilet.push(ic); }); });
         db.workouts.filter(w => inM(w.date)).forEach(w => at(w.date).workouts.push({ name:w.name, minutes:w.minutes, kcal:w.kcal }));
         Object.values(db.activity).filter(a => inM(a.date)).forEach(a => { at(a.date).steps = a.steps; });
         Object.values(db.body).filter(b => inM(b.date)).forEach(b => { const o = at(b.date); o.weight = b.weight; o.bodyFat = b.bodyFat; o.bmi = b.bmi; o.muscle = b.muscle; o.waist1 = b.waist1; o.waist2 = b.waist2; o.waist = has(b.waist1) || has(b.waist2) ? 1 : 0; });
@@ -915,6 +926,18 @@ function workoutRow(w){
 }
 function toiletIcon(l){ return String(l).replace(/💩/g, '').trim() || '💩'; }
 function isToilet(l){ return String(l).indexOf('💩') >= 0; }
+// 상태 기록 하나하나: [{ id, l(이름), time }] 시간 순 (시간 없는 건 앞)
+function stateEntries(d){
+  const out = [];
+  ((d && d.states) || []).forEach(s => (s.labels || []).forEach(l => { if (l) out.push({ id: s.id, l, time: String(s.time || '').slice(0, 5) }); }));
+  return out.sort((a, b) => a.time.localeCompare(b.time));
+}
+// 배변 상태별 시간 (예: { '💩👍': '08:30' }) — 그 상태가 들어있는 줄의 시간
+function toiletTimes(d){
+  const out = {};
+  ((d && d.states) || []).forEach(s => (s.labels || []).forEach(l => { if (isToilet(l) && s.time && !out[l]) out[l] = String(s.time).slice(0, 5); }));
+  return out;
+}
 function dayLabels(d){
   const out = [];
   ((d && d.states) || []).forEach(s => (s.labels || []).forEach(l => { if (l && out.indexOf(l) < 0) out.push(l); }));
@@ -958,9 +981,11 @@ function renderToday(){
   let h = '';
 
   // 상태: 칩만 한 줄로
-  const labels = dayLabels(d);
+  const labels = dayLabels(d), tt = toiletTimes(d);
   h += `<section class="sec"><div class="sec-head"><button class="sec-add" data-act="state">${lbl}상태 <span>＋</span></button>${waterHtml()}</div>`;
-  if (labels.length) h += `<button class="chips state-chips" data-act="state">${labels.map(l => `<span class="chip sm${isToilet(l) ? ' toilet' : ''}">${esc(l)}</span>`).join('')}</button>`;
+  // 상태는 입력한 것마다 칩 하나 (배변은 하루에 여러 번도 가능). 칩을 누르면 그 기록만 고치는 창
+  const ents = stateEntries(d);
+  if (ents.length) h += `<div class="chips state-chips">${ents.map(x => `<button class="chip sm${isToilet(x.l) ? ' toilet' : ''}" data-act="state-edit" data-id="${esc(x.id)}" data-l="${esc(x.l)}">${esc(x.l)}${isToilet(x.l) && x.time ? `<small class="ct">${korTime(x.time)}</small>` : ''}</button>`).join('')}</div>`;
   h += `</section>`;
 
   // 신체 · 운동: 신체 항목을 한 줄에
@@ -1385,40 +1410,89 @@ function openMealSheet(meal){
 }
 
 /* 상태 기록 */
+function stateChipsHtml(sel){
+  const chips = S.settings.chips.slice();
+  sel.forEach(l => { if (chips.indexOf(l) < 0) chips.push(l); });
+  return chips.map(c => `<button class="chip${sel.has(c) ? ' on' : ''}" data-chip="${esc(c)}">${esc(c)}</button>`).join('') + '<button class="chip add" id="sAdd">＋ 추가</button>';
+}
+function bindStateAdd(sel, paint, single){
+  $('#sChips').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'sAdd') { $('#sAddRow').classList.remove('hidden'); $('#sNew').focus(); return; }
+    const c = b.dataset.chip;
+    if (single) { sel.clear(); sel.add(c); } else { sel.has(c) ? sel.delete(c) : sel.add(c); }
+    paint();
+  };
+  $('#sNewOk').onclick = () => {
+    const v = $('#sNew').value.trim().replace(/,/g, ' '); if (!v) return;
+    if (S.settings.chips.indexOf(v) < 0) { S.settings.chips.push(v); saveSettings(); }
+    if (single) sel.clear();
+    sel.add(v); $('#sNew').value = ''; $('#sAddRow').classList.add('hidden'); paint();
+  };
+}
+/* 상태 새로 입력: 고른 상태마다 기록이 하나씩 생겨요 (배변도 여러 번 입력 가능) */
 function openStateSheet(){
-  const sel = new Set(dayLabels(S.day));
-  const ctx = {
-    title: '상태',
+  const sel = new Set();
+  openSheet({
+    title: '상태 입력',
     html: `
       <div class="group"><div class="group-label">상태</div><div class="chips" id="sChips"></div>
         <div class="add-row hidden" id="sAddRow"><input id="sNew" placeholder="새 상태 이름" maxlength="12"><button id="sNewOk">추가</button></div>
+        <div class="t-rows"><label class="t-row"><span>시간</span><input type="time" id="sTime" value="${nowTime()}"></label></div>
       </div>
-      <p class="hint">고른 상태가 이 날짜에 저장돼요. 모두 해제하고 저장하면 지워져요.</p>`,
+      <p class="hint">고른 상태가 이 시간으로 새로 기록돼요. 이미 입력한 상태는 오늘 화면에서 그 칩을 누르면 고치거나 지울 수 있어요.</p>`,
     mount(){
-      const paint = () => {
-        const chips = S.settings.chips.slice();
-        sel.forEach(l => { if (chips.indexOf(l) < 0) chips.push(l); });
-        $('#sChips').innerHTML = chips.map(c => `<button class="chip${sel.has(c) ? ' on' : ''}" data-chip="${esc(c)}">${esc(c)}</button>`).join('') + '<button class="chip add" id="sAdd">＋ 추가</button>';
-      };
-      paint();
-      $('#sChips').onclick = e => {
-        const b = e.target.closest('button'); if (!b) return;
-        if (b.id === 'sAdd') { $('#sAddRow').classList.remove('hidden'); $('#sNew').focus(); return; }
-        const c = b.dataset.chip; sel.has(c) ? sel.delete(c) : sel.add(c); paint();
-      };
-      $('#sNewOk').onclick = () => {
-        const v = $('#sNew').value.trim().replace(/,/g, ' '); if (!v) return;
-        if (S.settings.chips.indexOf(v) < 0) { S.settings.chips.push(v); call('saveSettings', { settings: S.settings }).catch(fail); }
-        sel.add(v); $('#sNew').value = ''; $('#sAddRow').classList.add('hidden'); paint();
-      };
+      const paint = () => { $('#sChips').innerHTML = stateChipsHtml(sel); };
+      paint(); bindStateAdd(sel, paint, false);
     },
     save(){
-      S.day.states = sel.size ? [{ id: tmpId(), date: S.date, time: nowTime(), labels: [...sel] }] : [];
+      if (!sel.size) { toast('상태를 하나 이상 골라 주세요'); return false; }
+      const time = $('#sTime').value || nowTime();
+      const rows = [...sel].map(l => ({ id: 's' + tmpId(), date: S.date, time, labels: [l] }));
+      S.day.states = (S.day.states || []).concat(rows);
       renderToday(); cacheDay();
-      send('saveDayState', { date: S.date, time: nowTime(), labels: [...sel] });
+      rows.forEach(x => send('saveState', { id: x.id, date: x.date, time: x.time, labels: x.labels }));
     }
-  };
-  openSheet(ctx);
+  });
+}
+/* 상태 하나 고치기 / 지우기 */
+function openStateEdit(id, label){
+  const row = (S.day.states || []).find(x => x.id === id); if (!row) return;
+  const sel = new Set([label]);
+  openSheet({
+    title: '상태 수정',
+    html: `
+      <div class="group"><div class="group-label">상태</div><div class="chips" id="sChips"></div>
+        <div class="add-row hidden" id="sAddRow"><input id="sNew" placeholder="새 상태 이름" maxlength="12"><button id="sNewOk">추가</button></div>
+        <div class="t-rows"><label class="t-row"><span>시간</span><input type="time" id="sTime" value="${String(row.time || '').slice(0, 5) || nowTime()}"></label></div>
+      </div>
+      <button class="del-btn" id="sDelete">이 상태 삭제</button>`,
+    mount(){
+      const paint = () => { $('#sChips').innerHTML = stateChipsHtml(sel); };
+      paint(); bindStateAdd(sel, paint, true);
+      armDelete($('#sDelete'), async () => {
+        const rest = row.labels.filter(l => l !== label);
+        if (rest.length) { row.labels = rest; send('saveState', { id: row.id, date: row.date || S.date, time: row.time || '', labels: rest }); }
+        else { S.day.states = S.day.states.filter(x => x.id !== id); send('deleteState', { id }); }
+        renderToday(); cacheDay();
+      });
+    },
+    save(){
+      const nl = [...sel][0] || label, time = $('#sTime').value || nowTime();
+      if (row.labels.length === 1) {
+        row.labels = [nl]; row.time = time;
+        send('saveState', { id: row.id, date: row.date || S.date, time, labels: [nl] });
+      } else {
+        // 예전 방식(한 줄에 여러 상태)으로 저장된 기록은 고친 상태만 따로 떼어내요
+        row.labels = row.labels.filter(l => l !== label);
+        send('saveState', { id: row.id, date: row.date || S.date, time: row.time || '', labels: row.labels });
+        const nr = { id: 's' + tmpId(), date: S.date, time, labels: [nl] };
+        S.day.states.push(nr);
+        send('saveState', { id: nr.id, date: nr.date, time, labels: [nl] });
+      }
+      renderToday(); cacheDay();
+    }
+  });
 }
 
 /* 신체 */
@@ -1523,17 +1597,20 @@ function renderCal(data){
   // 탭별로 날짜 아래에 보여줄 내용
   const detail = info => {
     if (tab === 'state') {
-      const ls = info.labels || [];
+      const cnt = {}; (info.labels || []).forEach(l => cnt[l] = (cnt[l] || 0) + 1);
+      const ls = Object.keys(cnt);
       return ls.map(l => {
-        if (isToilet(l)) { const ic = toiletIcon(l); return `<span class="cv ${ic === '👎' ? 'cvn' : 'cvg'}">💩${ic === '💩' ? '' : esc(ic)}</span>`; }
-        return `<span class="cv cvt">${esc(l)}</span>`;
+        const n = cnt[l] > 1 ? `<b class="cnt">${cnt[l]}</b>` : '';
+        if (isToilet(l)) { const ic = toiletIcon(l); return `<span class="cv ${ic === '👎' ? 'cvn' : 'cvg'}">💩${ic === '💩' ? '' : esc(ic)}${n}</span>`; }
+        return `<span class="cv cvt">${esc(l)}${n}</span>`;
       }).join('');
     }
     if (tab === 'body') {
       // 체성분은 그날 하나라도 기록이 있으면 빠진 항목을 '-'로 보여줘요 (나중에 채워 넣을 수 있게)
       const any = bms.some(k => has(info[k]));
       if (!any) return '';
-      return bms.filter(k => has(info[k]) || bg === 'comp').map(k => has(info[k])
+      return bms.map(k => has(info[k])   // 사이즈·체성분 모두: 항목 자리 고정, 안 잰 항목은 '-'
+
         ? `<span class="bv mono"><i>${BODY[k][2]}</i>${(+info[k]).toFixed(1)}${BODY[k][1] ? `<small>${BODY[k][1]}</small>` : ''}</span>`
         : `<span class="bv na"><i>${BODY[k][2]}</i>-</span>`).join('');
     }
@@ -1570,7 +1647,7 @@ function renderCal(data){
   else if (tab === 'all') below = `<div class="set-label">이번 달 운동</div><div class="chart">${workoutSummary(data)}</div>`;
   else if (tab === 'state') {
     let good = 0, bad = 0; const cnt = {};
-    keys.forEach(k => (data[k].labels || []).forEach(l => {
+    keys.forEach(k => [...new Set(data[k].labels || [])].forEach(l => {
       if (isToilet(l)) { if (toiletIcon(l) === '👎') bad++; else good++; } else cnt[l] = (cnt[l] || 0) + 1;
     }));
     const lines = [['💩👍', good], ['💩👎', bad]].concat(Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).map(l => [esc(l), cnt[l]]));
@@ -1900,8 +1977,8 @@ async function drawExport(dayArg){
 
   const info = [], b = d.body || {};
   if (S.exOpt.state) {
-    const lbs = dayLabels(d);
-    if (lbs.length) info.push(['상태', lbs.join('  ·  ')]);
+    const ents = stateEntries(d);
+    if (ents.length) info.push(['상태', ents.map(x => isToilet(x.l) && x.time ? `${x.l} ${korTime(x.time)}` : x.l).join('  ·  ')]);
     if (waterMl(d)) info.push(['물', fmtMl(waterMl(d))]);
   }
   if (S.exOpt.body) {
@@ -2140,6 +2217,7 @@ function bind(){
     const id = el.dataset.id, d = S.day;
     switch (el.dataset.act) {
       case 'state': openStateSheet(); break;
+      case 'state-edit': openStateEdit(id, el.dataset.l); break;
       case 'body': openBodySheet(); break;
       case 'workout-new': openWorkoutSheet(); break;
       case 'workout-edit': openWorkoutSheet(d.workouts.find(x => x.id === id)); break;
