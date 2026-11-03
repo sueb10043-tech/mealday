@@ -257,6 +257,28 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .legend{display:flex;gap:16px;color:var(--sub);font-size:13px;margin:12px 4px 0}
 .legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px}
 .chart{background:var(--soft);border-radius:20px;padding:14px 10px 10px;margin-top:10px}
+.chg-seg{display:flex;background:#ecebe7;border-radius:12px;padding:3px;margin:8px 0 10px}
+.chg-seg button{flex:1 1 0;min-width:0;text-align:center;padding:8px 0;border-radius:9px;font-size:15px;font-weight:600;color:#777}
+.chg-seg button.on{background:#fff;color:#111;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.chg-card{padding:12px 12px 8px}
+.chg-head{display:flex;align-items:baseline;gap:8px;margin:0 4px 6px}
+.chg-n{font-size:15px;font-weight:700;color:#333;white-space:nowrap}
+.chg-tip{flex:1;font-size:12px;color:#7a5c38;font-weight:600;white-space:nowrap;overflow:hidden}
+.chg-v{margin-left:auto;display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.chg-v b{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.chg-v b small{font-size:13px;font-weight:600;color:var(--sub);margin-left:1px}
+.chg-sub{font-size:12px;color:var(--sub)}
+.chg-d{font-size:13px;font-weight:700;color:var(--sub)}
+.chg-d.up{color:#2F6FE0}.chg-d.dn{color:#E5484D}
+.chg-none{font-size:13px;color:var(--sub)}
+.chg-svg{touch-action:pan-y;display:block}
+.chg-legend{display:flex;gap:14px;justify-content:flex-end;font-size:11px;color:var(--sub);margin:2px 4px 0}
+.chg-legend i{display:inline-block;vertical-align:middle;margin-right:4px}
+.chg-legend .dot{width:6px;height:6px;border-radius:50%;background:#c9b79c}
+.chg-legend .ln{width:14px;height:3px;border-radius:2px;background:#7a5c38}
+.goal-row{display:flex;align-items:center;gap:8px;margin:18px 4px 4px;font-size:15px;font-weight:600;color:#333}
+.goal-row input{width:80px;border:0;border-radius:10px;background:#ececec;padding:8px 10px;font-size:15px}
+.goal-row button{margin-left:auto;padding:8px 14px;border-radius:10px;background:#111;color:#fff;font-size:14px;font-weight:600}
 .chart svg{width:100%;height:auto;display:block}
 
 .ex{position:fixed;inset:0;background:#f2f2f2;z-index:50;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
@@ -272,7 +294,7 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 #exWeek .wk-day{font-size:13px;color:var(--sub);font-weight:600;margin:4px 4px 6px}
 .ex-opts{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 12px}
 .ex-opt{padding:8px 14px;border-radius:999px;border:1.5px solid #dcdcdc;background:#fff;font-size:14px}
-.ex-opt.on{background:#111;border-color:#111;color:#fff}
+.ex-opt.on{background:#F1E7D8;border-color:#C2A27C;color:#5b4630;font-weight:700}
 .water-big{text-align:center;padding:18px 0 8px}
 .water-big span{display:block;font-size:40px;font-weight:800;letter-spacing:-1px}
 .water-big small{color:var(--sub);font-size:14px}
@@ -419,6 +441,7 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
       <button class="x-btn" id="exClose" aria-label="닫기">✕</button>
     </div>
   </div>
+  <div class="ex-week" id="exDayNav"><button data-dd="-1" aria-label="전날">‹</button><span id="exDayLbl"></span><button data-dd="1" aria-label="다음날">›</button></div>
   <div class="ex-week hidden" id="exWeekNav"><button data-wk="-1" aria-label="이전 주">‹</button><span id="exWeekLbl"></span><button data-wk="1" aria-label="다음 주">›</button></div>
   <div class="ex-opts" id="exOpts"></div>
   <div class="ex-scroll"><img id="exImg" alt="하루 기록 이미지"><div id="exWeek" class="hidden"></div></div>
@@ -466,7 +489,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-03-70';
+const APP_VERSION = '2026-11-03-74';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -494,13 +517,22 @@ const demoApi = (() => {
     const d = addDays(today, -i); if (d < first && i > 6) break;
     const n = 2 + (i % 3);
     for (let k = 0; k < n; k++) { const m = menus[(i * 3 + k * 2) % menus.length]; db.meals.push({ id:nid(), date:d, time:m[1], tag:m[0], memo:m[2], photoId:'' }); }
-    db.body[d] = { date:d, weight:(55.8 + i * 0.07 + (i % 2 ? 0.2 : 0)).toFixed(1), bodyFat:(20.7 + i * 0.05).toFixed(1), bmi:'21.4', muscle: i % 3 === 0 ? (23.1 - i * 0.02).toFixed(1) : '', waist1: i % 3 === 0 ? (68.5 + i * 0.1).toFixed(1) : '', waist2: i % 3 === 0 ? (74.0 + i * 0.1).toFixed(1) : '', measuredAt:'07:30' };
+    db.body[d] = { date:d, weight:(55.8 + i * 0.07 + (i % 2 ? 0.2 : 0)).toFixed(1), bodyFat:(20.7 + i * 0.05).toFixed(1), bmi:(20.2 + i * 0.02).toFixed(1), muscle: i % 3 === 0 ? (24.3 - i * 0.02).toFixed(1) : '', waist1: i % 3 === 0 ? (68.5 + i * 0.1).toFixed(1) : '', waist2: i % 3 === 0 ? (74.0 + i * 0.1).toFixed(1) : '', measuredAt:'07:30' };
     db.activity[d] = { date:d, steps: String(4200 + ((i * 1777) % 6000)), water: '', waterLog: [[300, 500], [500, 300, 300], [300, 300, 500, 100]][i % 3].join(',') };
     db.activity[d].water = String(db.activity[d].waterLog.split(',').reduce((a, n) => a + +n, 0));
     const lb = [['💩👍'], ['💩👎', '더부룩함'], ['가스참'], ['💩👍']][i % 4];
     db.states.push({ id:nid(), date:d, time:'07:50', labels: lb });
-    if (i % 3 === 0) db.workouts.push({ id:nid(), date:d, time:'', name:'운동', minutes:80, source:'health' });
+    if (i % 3 === 0) db.workouts.push({ id:nid(), date:d, time:'07:10', name:'걷기(인클라인)', minutes:40, kcal:182, source:'manual' });
     if (i % 3 === 1) db.workouts.push({ id:nid(), date:d, time:'12:44', name:'전신근력운동', minutes:44, kcal:131, source:'edited' }, { id:nid(), date:d, time:'13:28', name:'걷기', minutes:36, kcal:168, source:'edited' });
+  }
+  // 변화 탭 미리보기용: 반년 치 신체·걸음·운동 기록 (5월 60kg대 → 지금 55kg대)
+  for (let i = 14; i < 190; i++) {
+    const d = addDays(today, -i), t = i / 190, wob = Math.sin(i * 1.7) * 0.35 + Math.sin(i * 0.37) * 0.25;
+    if (i % 5 !== 2) db.body[d] = { date:d, weight:(55.9 + t * 4.3 + wob).toFixed(1), bodyFat:(20.8 + t * 6.5 + wob * 0.8).toFixed(1),
+      bmi:(20.3 + t * 1.6 + wob * 0.3).toFixed(1), muscle: i % 2 ? (24.4 + Math.sin(i) * 0.4 - t * 0.2).toFixed(1) : '',
+      waist1: i % 7 === 0 ? (68.8 + t * 4 + wob).toFixed(1) : '', waist2: i % 7 === 0 ? (74.2 + t * 4.5 + wob).toFixed(1) : '', measuredAt:'07:00' };
+    db.activity[d] = { date:d, steps: String(3500 + ((i * 2311) % 7000)), water:'', waterLog:'' };
+    if (i % 3 === 0) db.workouts.push({ id:nid(), date:d, time:'19:00', name: i % 2 ? '걷기(인클라인)' : '전신근력운동', minutes:35, kcal: 120 + (i * 37) % 120, source:'manual' });
   }
   db.diary[today] = '미리보기용 예시 일기예요. 실제 배포하면 내 기록이 보여요.';
   db.lastSync = today + ' 07:35';
@@ -1573,7 +1605,7 @@ async function fetchMonth(ym){
 async function loadMonth(){
   const ym = S.ym;
   renderMonthTab(monthCache(ym));
-  try { const r = await fetchMonth(ym); if (ym === S.ym && (S.tab === 'cal' || S.tab === 'chg')) renderMonthTab(r); } catch(e){ fail(e); }
+  try { const r = await fetchMonth(ym); if (ym === S.ym && S.tab === 'cal') renderMonthTab(r); } catch(e){ fail(e); }
   // 앞뒤 달도 미리 받아둬서 넘길 때 바로 보이게
   const p = ym.split('-').map(Number);
   [-1, 1].forEach(k => { const d = new Date(p[0], p[1] - 1 + k, 1); const y2 = d.getFullYear() + '-' + pad(d.getMonth() + 1);
@@ -1609,7 +1641,9 @@ function renderCal(data){
       // 체성분은 그날 하나라도 기록이 있으면 빠진 항목을 '-'로 보여줘요 (나중에 채워 넣을 수 있게)
       const any = bms.some(k => has(info[k]));
       if (!any) return '';
-      return bms.map(k => has(info[k])   // 사이즈·체성분 모두: 항목 자리 고정, 안 잰 항목은 '-'
+      // 사이즈: 허리를 하나도 안 잰 날은 허리 줄을 아예 빼요 (체중만)
+      const show = bg === 'wt' && !has(info.waist1) && !has(info.waist2) ? bms.filter(k => k === 'weight') : bms;
+      return show.map(k => has(info[k])   // 사이즈·체성분 모두: 항목 자리 고정, 안 잰 항목은 '-'
 
         ? `<span class="bv mono"><i>${BODY[k][2]}</i>${(+info[k]).toFixed(1)}${BODY[k][1] ? `<small>${BODY[k][1]}</small>` : ''}</span>`
         : `<span class="bv na"><i>${BODY[k][2]}</i>-</span>`).join('');
@@ -1748,16 +1782,120 @@ function weeklyBodyHtml(data, y, m, ws, bms, BODY){
   return `<div class="set-label">주별 평균 <span style="font-weight:500;color:var(--sub);font-size:12px">· 오른쪽 작은 숫자는 전주 대비</span></div>
     <div class="chart" style="padding:10px 12px"><table class="wk-table"><thead><tr><th></th>${bms.map(k => `<th>${BODY[k][0]}<small>${BODY[k][1]}</small></th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
-/* ───── 변화 탭 ───── */
-function renderChg(data){
-  const p = S.ym.split('-').map(Number), y = p[0], m = p[1];
-  const days = new Date(y, m, 0).getDate();
-  $('#view-chg').innerHTML = `
-    <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월</span><button data-act="mnext">›</button></div>
-    <div class="set-label">이번 달 변화</div>
-    <div class="chart">${data ? chartSvg(data, days) : '<p class="empty" style="text-align:center">불러오는 중…</p>'}</div>`;
+/* ───── 변화 탭 ─────
+ * 기간 [1달·3달·6달·전체] × 묶음 [전체·사이즈·체성분·활동]
+ * 항목마다 카드 하나: 최근 값 + 기간 첫 기록 대비 변화, 날짜별 값은 연한 점 / 주별 평균은 굵은 선,
+ * 그래프를 누르거나 밀면 그 날짜 값이 떠요. 체중에는 목표선(설정한 경우). 활동은 주별 막대.
+ */
+const CHG_METRICS = {
+  weight:  { n: '체중', u: 'kg', g: 'size', good: -1 },
+  waist1:  { n: '허리1', u: 'cm', g: 'size', good: -1 },
+  waist2:  { n: '허리2', u: 'cm', g: 'size', good: -1 },
+  bodyFat: { n: '체지방률', u: '%', g: 'comp', good: -1 },
+  muscle:  { n: '골격근량', u: 'kg', g: 'comp', good: 1 },
+  bmi:     { n: 'BMI', u: '', g: 'comp', good: -1 }
+};
+const CHG_PERIODS = [['1m', '1달', 30], ['3m', '3달', 91], ['6m', '6달', 182], ['all', '전체', 365]];
+const CHG_GROUPS = [['all', '전체'], ['size', '사이즈'], ['comp', '체성분'], ['act', '활동']];
+S.chg = { period: '3m', group: 'all' };
+const chgPoints = {};   // 카드별 점 (누르면 값 보기용)
+let chgJob = 0;
+async function renderChg(){
+  const job = ++chgJob, P = CHG_PERIODS.find(x => x[0] === S.chg.period), to = todayStr(), from = addDays(to, -(P[2] - 1));
+  const head = `
+    <div class="chg-seg">${CHG_PERIODS.map(([k, n]) => `<button class="${S.chg.period === k ? 'on' : ''}" data-cp="${k}">${n}</button>`).join('')}</div>
+    <div class="cal-sub chg-groups">${CHG_GROUPS.map(([k, n]) => `<button class="${S.chg.group === k ? 'on' : ''}" data-cg="${k}">${n}</button>`).join('')}</div>`;
+  $('#view-chg').innerHTML = head + '<div class="chart"><p class="empty" style="text-align:center">불러오는 중…</p></div>';
+  // 기간에 걸친 달마다 기록 모으기 (한 번 받은 달은 휴대폰에 저장돼 있어서 바로)
+  const months = []; for (let d = from.slice(0, 7) + '-01'; d <= to; ) { months.push(d.slice(0, 7)); const p = d.split('-').map(Number); const n = new Date(p[0], p[1], 1); d = n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-01'; }
+  const all = {};
+  await Promise.all(months.map(async ym => { let m = monthMem[ym] || monthCache(ym); if (!m) { try { m = await fetchMonth(ym); } catch(e){ m = {}; } } Object.assign(all, m || {}); }));
+  if (job !== chgJob || S.tab !== 'chg') return;
+  const days = Object.keys(all).filter(d => d >= from && d <= to).sort();
+  let body = '';
+  const g = S.chg.group;
+  if (g !== 'act') {
+    const keys = Object.keys(CHG_METRICS).filter(k => g === 'all' || CHG_METRICS[k].g === g);
+    body += keys.map(k => chgCard(k, days.filter(d => has(all[d][k])).map(d => ({ d, v: +all[d][k] })), from, to)).join('');
+  }
+  if (g === 'all' || g === 'act') body += chgActivity(all, days, from, to);
+  if (g === 'all' || g === 'size') body += `<div class="goal-row"><span>목표 체중</span><input id="goalIn" inputmode="decimal" placeholder="예: 54" value="${esc(S.settings.goalWeight || '')}"><span>kg</span><button id="goalOk">저장</button></div>
+    <p class="hint">목표를 넣으면 체중 그래프에 점선으로 보여요. 비우고 저장하면 지워져요.</p>`;
+  $('#view-chg').innerHTML = head + body;
 }
-function renderMonthTab(data){ if (S.tab === 'chg') renderChg(data); else renderCal(data); }
+function chgWeekly(pts){
+  const by = {};
+  pts.forEach(p => { const w = weekStartOf(p.d); (by[w] = by[w] || []).push(p.v); });
+  return Object.keys(by).sort().map(w => ({ d: addDays(w, 3), v: by[w].reduce((a, b) => a + b, 0) / by[w].length }));
+}
+function dayNum(d){ const p = d.split('-').map(Number); return Date.UTC(p[0], p[1] - 1, p[2]) / 864e5; }
+function chgCard(k, pts, from, to){
+  const M = CHG_METRICS[k], f = v => v.toFixed(1);
+  const last = pts[pts.length - 1];
+  let headR = '<span class="chg-none">기록 없음</span>';
+  if (last) {
+    let dl = '';
+    if (pts.length >= 2) {
+      const dd = Math.round((last.v - pts[0].v) * 10) / 10, goodDir = dd === 0 ? null : (Math.sign(dd) === M.good);
+      dl = `<span class="chg-d ${goodDir === null ? '' : goodDir ? 'up' : 'dn'}">${dd > 0 ? '▲' : dd < 0 ? '▼' : ''}${Math.abs(dd).toFixed(1)}${M.u}</span>`;
+    }
+    headR = `<b class="mono">${f(last.v)}<small>${M.u}</small></b>${dl}`;
+  }
+  let svg = '<p class="empty" style="text-align:center;margin:18px 0">기록이 2개 이상이면 그래프가 보여요.</p>';
+  if (pts.length >= 2) {
+    const W = 340, H = 150, L = 40, R = 10, T = 12, B = 22;
+    const goal = k === 'weight' && +S.settings.goalWeight > 0 ? +S.settings.goalWeight : null;
+    const vs = pts.map(p => p.v).concat(goal ? [goal] : []);
+    let mn = Math.min(...vs), mx = Math.max(...vs); if (mx - mn < 1) { const c = (mx + mn) / 2; mn = c - .5; mx = c + .5; }
+    const pad_ = (mx - mn) * 0.08; mn -= pad_; mx += pad_;
+    const x0 = dayNum(from), x1 = dayNum(to);
+    const X = d => L + (dayNum(d) - x0) / Math.max(1, x1 - x0) * (W - L - R), Y = v => T + (mx - v) / (mx - mn) * (H - T - B);
+    const wk = chgWeekly(pts);
+    let o = '';
+    [mx - pad_, (mx + mn) / 2, mn + pad_].forEach(v => { o += `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#e6e3dc"/><text x="${L - 6}" y="${(Y(v) + 4).toFixed(1)}" font-size="10" fill="#9a9a9e" text-anchor="end">${v.toFixed(1)}</text>`; });
+    if (goal) o += `<line x1="${L}" x2="${W - R}" y1="${Y(goal).toFixed(1)}" y2="${Y(goal).toFixed(1)}" stroke="#2F6FE0" stroke-dasharray="4 4" stroke-width="1.3"/><text x="${W - R}" y="${(Y(goal) - 4).toFixed(1)}" font-size="10" fill="#2F6FE0" text-anchor="end">목표 ${goal}</text>`;
+    o += pts.map(p => `<circle cx="${X(p.d).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="2.2" fill="#c9b79c"/>`).join('');
+    if (wk.length >= 2) o += `<polyline points="${wk.map(p => X(p.d).toFixed(1) + ',' + Y(p.v).toFixed(1)).join(' ')}" fill="none" stroke="#7a5c38" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const md = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`, mid = addDays(from, Math.round((x1 - x0) / 2));
+    o += [[from, 'start'], [mid, 'middle'], [to, 'end']].map(([d, a]) => `<text x="${X(d).toFixed(1)}" y="${H - 5}" font-size="10" fill="#9a9a9e" text-anchor="${a}">${md(d)}</text>`).join('');
+    o += `<g class="scrub" style="display:none"><line y1="${T}" y2="${H - B}" stroke="#111" stroke-width="1"/><circle r="4" fill="#111"/></g>`;
+    chgPoints[k] = { pts, X, Y, L, R, W, u: M.u };
+    svg = `<svg class="chg-svg" data-ck="${k}" viewBox="0 0 ${W} ${H}">${o}</svg>`;
+  }
+  return `<div class="chart chg-card"><div class="chg-head"><span class="chg-n">${M.n}</span><span class="chg-tip" id="tip-${k}"></span><span class="chg-v">${headR}</span></div>${svg}
+    ${pts.length >= 2 ? '<div class="chg-legend"><span><i class="dot"></i>날마다 잰 값</span><span><i class="ln"></i>주별 평균</span></div>' : ''}</div>`;
+}
+function chgActivity(all, days, from, to){
+  const by = {};
+  days.forEach(d => { const w = weekStartOf(d), o = by[w] = by[w] || { st: 0, sn: 0, kc: 0 }; const st = +all[d].steps || 0; if (st > 0) { o.st += st; o.sn++; } (all[d].workouts || []).forEach(x => o.kc += +x.kcal || 0); });
+  const ws = Object.keys(by).sort();
+  if (!ws.length) return '<div class="chart"><p class="empty" style="text-align:center">이 기간 활동 기록이 없어요.</p></div>';
+  const bars = (title, vals, unit, color) => {
+    const W = 340, H = 130, L = 8, B = 22, T = 16, mx = Math.max(1, ...vals), bw = (W - 2 * L) / vals.length;
+    const md = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+    let o = vals.map((v, i) => { const h = (H - T - B) * v / mx; return `<rect x="${(L + i * bw + bw * 0.15).toFixed(1)}" y="${(H - B - h).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}"/>`; }).join('');
+    const step = Math.max(1, Math.ceil(ws.length / 5));
+    o += ws.map((w, i) => i % step ? '' : `<text x="${(L + i * bw + bw / 2).toFixed(1)}" y="${H - 6}" font-size="10" fill="#9a9a9e" text-anchor="middle">${md(w)}</text>`).join('');
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return `<div class="chart chg-card"><div class="chg-head"><span class="chg-n">${title}</span><span class="chg-v"><small class="chg-sub">주 평균</small> <b class="mono">${Math.round(avg).toLocaleString('ko-KR')}<small>${unit}</small></b></span></div><svg viewBox="0 0 ${W} ${H}">${o}</svg></div>`;
+  };
+  return bars('👟 하루 평균 걸음 (주별)', ws.map(w => by[w].sn ? by[w].st / by[w].sn : 0), '보', '#9DB8E0')
+       + bars('💪 운동 칼로리 합계 (주별)', ws.map(w => by[w].kc), 'kcal', '#E7B48F');
+}
+// 그래프를 누르거나 밀면 가장 가까운 날의 값 보여주기
+function chgScrub(e){
+  const svg = e.target.closest('.chg-svg'); if (!svg) return;
+  const c = chgPoints[svg.dataset.ck]; if (!c) return;
+  const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * c.W;
+  let best = null, bd = 1e9; c.pts.forEach(p => { const dd = Math.abs(c.X(p.d) - x); if (dd < bd) { bd = dd; best = p; } });
+  if (!best) return;
+  const g = svg.querySelector('.scrub'), px = c.X(best.d), py = c.Y(best.v);
+  g.style.display = ''; g.querySelector('line').setAttribute('x1', px); g.querySelector('line').setAttribute('x2', px);
+  g.querySelector('circle').setAttribute('cx', px); g.querySelector('circle').setAttribute('cy', py);
+  const tip = $('#tip-' + svg.dataset.ck); if (tip) tip.textContent = `${+best.d.slice(5, 7)}/${+best.d.slice(8, 10)} · ${best.v.toFixed(1)}${c.u}`;
+  clearTimeout(svg._t); svg._t = setTimeout(() => { g.style.display = 'none'; if (tip) tip.textContent = ''; }, 2500);
+}
+function renderMonthTab(data){ if (S.tab === 'cal') renderCal(data); }
 function fmtMin(m){ const h = Math.floor(m / 60), r = m % 60; return h ? `${h}시간${r ? ' ' + r + '분' : ''}` : `${r}분`; }
 function workoutSummary(data){
   const by = {}; let days = 0, mins = 0;
@@ -1944,11 +2082,12 @@ function wrap(ctx, text, maxW){
 async function openExport(){
   if (!S.day) return;
   $('#ex').classList.remove('hidden');
+  S.exDay = S.day; $('#exDayLbl').textContent = korDate(S.day.date);
   S.exOpt = { state: false, body: false, act: true, meal: true, diary: false };
   paintExOpts();
   S.exMode = 'day'; S.exWeek = weekStartOf(S.date);
   document.querySelectorAll('.ex-mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === 'day'));
-  $('#exWeekNav').classList.add('hidden'); $('#exImg').classList.remove('hidden'); $('#exWeek').classList.add('hidden');
+  $('#exWeekNav').classList.add('hidden'); $('#exDayNav').classList.remove('hidden'); $('#exImg').classList.remove('hidden'); $('#exWeek').classList.add('hidden');
   $('#exImg').removeAttribute('src');
   $('#exMsg').textContent = '이미지를 만드는 중…';
   await loadPhotos(S.day.meals);
@@ -1960,14 +2099,14 @@ async function openExport(){
   await drawExport();
 }
 
-const EX_ITEMS = [['state', '오늘의 상태'], ['body', '신체'], ['act', '운동'], ['meal', '식사'], ['diary', '오늘의 일기']];
+const EX_ITEMS = [['state', '상태'], ['body', '신체'], ['act', '운동'], ['meal', '식사'], ['diary', '일기']];
 function paintExOpts(){
   const all = EX_ITEMS.every(([k]) => S.exOpt[k]);
-  $('#exOpts').innerHTML = `<button class="ex-opt${all ? ' on' : ''}" data-k="all">${all ? '✓ ' : ''}전체</button>` + EX_ITEMS.map(([k, n]) => `<button class="ex-opt${S.exOpt[k] ? ' on' : ''}" data-k="${k}">${S.exOpt[k] ? '✓ ' : ''}${n}</button>`).join('');
+  $('#exOpts').innerHTML = `<button class="ex-opt${all ? ' on' : ''}" data-k="all">전체</button>` + EX_ITEMS.map(([k, n]) => `<button class="ex-opt${S.exOpt[k] ? ' on' : ''}" data-k="${k}">${n}</button>`).join('');
 }
 async function drawExport(dayArg){
   if (!dayArg && S.exMode === 'week') return drawWeek();
-  const d = dayArg || S.day, W = 1080, P = 64, F = '"Pretendard", -apple-system, "Apple SD Gothic Neo", sans-serif';
+  const d = dayArg || S.exDay || S.day, W = 1080, P = 64, F = '"Pretendard", -apple-system, "Apple SD Gothic Neo", sans-serif';
   const imgs = {};
   const meals = S.exOpt.meal ? d.meals : [];
   for (const m of meals) {
@@ -1996,7 +2135,7 @@ async function drawExport(dayArg){
     const act = [], ws = d.workouts || [];
     if (d.activity && has(d.activity.steps)) act.push(`👟 ${Number(d.activity.steps).toLocaleString('ko-KR')}걸음`);
     const kcalSum = ws.reduce((x, w) => x + (+w.kcal || 0), 0);
-    if (kcalSum) act.push(`🔥 총 ${kcalSum.toLocaleString('ko-KR')}kcal`);
+    if (ws.length) act.push(`🔥 총 ${kcalSum ? kcalSum.toLocaleString('ko-KR') + 'kcal' : '-'}`);   // 운동이 있으면 총 줄은 늘 (칼로리 안 넣었으면 -)
     ws.forEach(w => act.push('\t' + workoutIcon(w.name) + ' ' + w.name + ' ' + [has(w.kcal) ? w.kcal + 'kcal' : '', has(w.minutes) ? w.minutes + '분' : ''].filter(Boolean).join(' · ')));
     if (act.length) info.push(['운동', act.join('\n')]);
   }
@@ -2166,13 +2305,34 @@ async function drawWeek(){
   S.exWeekUrls = out;
   $('#exMsg').textContent = `기록이 있는 ${out.length}일 · 이미지 ${out.length}장 · 공유를 누르면 한꺼번에 보내져요.`;
 }
+/* 공유 화면에서 하루씩 이동: 휴대폰 저장본을 바로 쓰고 없으면 서버에서 받아요 */
+let exDayJob = 0;
+async function exGoDay(delta){
+  const job = ++exDayJob, date = addDays((S.exDay || S.day).date, delta);
+  $('#exDayLbl').textContent = korDate(date);
+  $('#exImg').removeAttribute('src'); S.exUrl = '';
+  $('#exMsg').textContent = '이미지를 만드는 중…';
+  const empty = { date, meals: [], states: [], body: null, activity: null, workouts: [], diary: '' };
+  let day = S.day && S.day.date === date ? S.day : null;
+  if (!day) { try { day = JSON.parse(lsGet('md_day_' + date) || 'null'); } catch(e){} }
+  if (!day) {
+    try { day = Object.assign(empty, await call('getDay', { date })); if (!DEMO) lsSet('md_day_' + date, JSON.stringify(day)); }
+    catch(e){ if (job === exDayJob) $('#exMsg').textContent = '그날 기록을 불러오지 못했어요.'; return; }
+  }
+  if (job !== exDayJob) return;
+  S.exDay = Object.assign({}, empty, day);
+  await loadPhotos(S.exDay.meals || []);
+  if (job !== exDayJob) return;
+  await drawExport();
+}
 function setExMode(mode){
   S.exMode = mode;
   document.querySelectorAll('.ex-mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
   $('#exWeekNav').classList.toggle('hidden', mode !== 'week');
+  $('#exDayNav').classList.toggle('hidden', mode === 'week');
   $('#exImg').classList.toggle('hidden', mode === 'week');
   $('#exWeek').classList.toggle('hidden', mode !== 'week');
-  if (mode === 'week') { S.exWeek = S.exWeek || weekStartOf(S.date); drawWeek(); }
+  if (mode === 'week') { S.exWeek = weekStartOf((S.exDay || S.day).date); drawWeek(); }
   else drawExport();
 }
 async function shareExport(){
@@ -2188,7 +2348,7 @@ async function shareExport(){
   if (!S.exUrl) return;
   try {
     const blob = await (await fetch(S.exUrl)).blob();
-    const file = new File([blob], `mealday_${S.date}.jpg`, { type: 'image/jpeg' });
+    const file = new File([blob], `mealday_${(S.exDay || S.day).date}.jpg`, { type: 'image/jpeg' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
   } catch(e){ if (e && e.name === 'AbortError') return; }
   toast('이미지를 길게 눌러 저장·공유해 주세요');
@@ -2203,7 +2363,8 @@ function setTab(tab){
   if (!S.settings) return;
   if (tab === 'today') loadDay();
   if (tab === 'cal') S.calBody = 'wt';   // 신체 탭 안에서는 늘 '사이즈'부터
-  if (tab === 'cal' || tab === 'chg') { S.ym = S.date.slice(0, 7); loadMonth(); }
+  if (tab === 'cal') { S.ym = S.date.slice(0, 7); loadMonth(); }
+  if (tab === 'chg') renderChg();
   if (tab === 'set') renderSet();
 }
 
@@ -2254,12 +2415,16 @@ function bind(){
   });
 
   $('#view-chg').addEventListener('click', e => {
-    const el = e.target.closest('[data-act]'); if (!el) return;
-    const p = S.ym.split('-').map(Number);
-    const nd = new Date(p[0], p[1] - 1 + (el.dataset.act === 'mnext' ? 1 : -1), 1);
-    S.ym = nd.getFullYear() + '-' + pad(nd.getMonth() + 1);
-    loadMonth();
+    const cp = e.target.closest('[data-cp]'); if (cp) { S.chg.period = cp.dataset.cp; renderChg(); return; }
+    const cg = e.target.closest('[data-cg]'); if (cg) { S.chg.group = cg.dataset.cg; renderChg(); return; }
+    if (e.target.closest('#goalOk')) {
+      const v = $('#goalIn').value.trim().replace(/[^\d.]/g, '');
+      S.settings.goalWeight = v && +v > 0 ? String(+v) : ''; saveSettings(); renderChg();
+      toast(S.settings.goalWeight ? `목표 체중 ${S.settings.goalWeight}kg` : '목표 체중을 지웠어요');
+    }
   });
+  $('#view-chg').addEventListener('pointerdown', chgScrub);
+  $('#view-chg').addEventListener('pointermove', e => { if (e.buttons || e.pointerType === 'touch') chgScrub(e); });
 
   $('#view-set').addEventListener('click', async e => {
     const el = e.target.closest('[data-act]'); if (!el) return;
@@ -2315,6 +2480,7 @@ function bind(){
   $('#exClose').onclick = () => $('#ex').classList.add('hidden');
   $('#exShare').onclick = shareExport;
   document.querySelector('.ex-mode').onclick = e => { const b = e.target.closest('[data-mode]'); if (b && b.dataset.mode !== S.exMode) setExMode(b.dataset.mode); };
+  $('#exDayNav').onclick = e => { const b = e.target.closest('[data-dd]'); if (b) exGoDay(+b.dataset.dd); };
   $('#exWeekNav').onclick = e => { const b = e.target.closest('[data-wk]'); if (!b) return; S.exWeek = addDays(S.exWeek, 7 * +b.dataset.wk); drawWeek(); };
   $('#exOpts').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; const k = b.dataset.k; if (k === 'all') EX_ITEMS.forEach(([x]) => S.exOpt[x] = true); else S.exOpt[k] = !S.exOpt[k]; paintExOpts(); drawExport(); };
 
