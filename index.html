@@ -140,7 +140,7 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .diary-text{display:block;width:100%;white-space:pre-wrap;line-height:1.6;color:#333;padding:6px 0}
 
 .tabbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));display:flex;gap:4px;padding:6px;background:rgba(250,250,250,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.04);z-index:20}
-.tabbar button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 22px;border-radius:999px;font-size:12px;color:#555}
+.tabbar button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 22px;white-space:nowrap;border-radius:999px;font-size:12px;color:#555}
 .tabbar button.on{background:#e9e9e9;color:#111;font-weight:600}
 
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:40}
@@ -281,6 +281,24 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .legend{display:flex;gap:16px;color:var(--sub);font-size:13px;margin:12px 4px 0}
 .legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px}
 .chart{background:var(--soft);border-radius:20px;padding:14px 10px 10px;margin-top:10px}
+.sheet.cnt-sheet{height:56vh}
+.sheet.cnt-sheet #sheetSave{display:none}
+.sheet.cnt-sheet #sheetBody{display:flex;flex-direction:column;flex:1}
+.sheet.cnt-sheet #cntBox{display:flex;flex-direction:column;flex:1;min-height:0}
+#sheetTitle .cnt-n{margin-left:8px;color:#B08D63}
+.cnt-head{display:flex;align-items:center;justify-content:space-between;margin:14px 0 14px}
+.cnt-head h2{font-size:21px;font-weight:800;letter-spacing:-.5px;margin:0}
+.cnt-n{font-size:inherit;font-weight:800}
+.cnt-pad{display:flex;flex-direction:column;align-items:stretch;width:100%;background:#fff;border-radius:24px;padding:14px;flex:1;min-height:150px;overflow-y:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent;position:relative}
+.cnt-pad:active{background:#efebe4}
+.cnt-emos{display:grid;grid-template-columns:repeat(5,1fr);gap:12px 4px;justify-items:center;align-content:start}   /* 한 줄에 5개: 세기 쉽게 */
+.cnt-emos span{font-size:30px;line-height:1.1}
+.cnt-emos span.new{animation:pop .22s ease-out}
+@keyframes pop{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+.cnt-pad p{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);margin:0;text-align:center;font-size:15px;color:var(--sub)}
+.cnt-acts{display:flex;gap:8px;margin-top:10px}
+.cnt-acts button{flex:1;display:flex;align-items:center;justify-content:center;height:44px;border-radius:14px;background:#fff;font-size:15px;font-weight:600;color:#333}
+.cnt-acts button:disabled{opacity:.4}
 .chg-seg{display:flex;background:#ecebe7;border-radius:12px;padding:3px;margin:8px 0 10px}
 .chg-seg button{flex:1 1 0;min-width:0;text-align:center;padding:8px 0;border-radius:9px;font-size:15px;font-weight:600;color:#777}
 .chg-seg button.on{background:#fff;color:#111;box-shadow:0 1px 4px rgba(0,0,0,.08)}
@@ -420,6 +438,9 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
   <div class="top-actions">
     <span class="logo">mealday</span>
     <div class="top-btns">
+      <button id="countBtn" class="icon-btn" aria-label="카운팅">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14M10 5v14M14 5v14M18 5v14"/><path d="M3.5 15.5l17-7"/></svg>
+      </button>
       <button id="exportBtn" class="icon-btn" aria-label="내보내기">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>
       </button>
@@ -520,7 +541,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-03-97';
+const APP_VERSION = '2026-11-03-101';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1156,12 +1177,12 @@ function openSheet(o){
   $('#sheetSave').disabled = false;
   $('#sheetBody').innerHTML = o.html;
   $('#sheetBody').scrollTop = 0;
-  $('#sheet').classList.toggle('tall', !!o.tall);
+  $('#sheet').classList.toggle('tall', !!o.tall); $('#sheet').classList.remove('cnt-sheet');
   $('#backdrop').classList.remove('hidden');
   $('#sheet').classList.remove('hidden');
   if (o.mount) o.mount();
 }
-function closeSheet(){ $('#sheet').classList.add('hidden'); $('#backdrop').classList.add('hidden'); sheetCtx = null; }
+function closeSheet(){ $('#sheet').classList.remove('cnt-sheet'); $('#sheet').classList.add('hidden'); $('#backdrop').classList.add('hidden'); sheetCtx = null; }
 function setSaveEnabled(on){ $('#sheetSave').disabled = !on; }
 async function sheetSave(){
   const btn = $('#sheetSave');
@@ -1962,6 +1983,37 @@ function drawChg(){
   const md = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
   $('#chgRange').textContent = `${md(from)} ~ ${md(to)} · ${dayNum(to) - dayNum(from) + 1}일`;
 }
+/* ───── 카운팅 탭: 빈 화면을 톡 할 때마다 귀여운 얼굴·음식 이모티콘이 하나씩 쌓여요 ─────
+ * 휴대폰에만 저장(앱을 닫았다 열어도 이어서 세요). */
+const CNT_KEY = 'md_cnt2';
+const CNT_EMOJI = ['🍙', '🍓', '🥑', '🍑', '🧁', '🍡', '🥕', '🍒', '🍪', '🥐', '🍇', '🥝', '🍠', '🍳', '🍊', '🫐',
+                   '😋', '🥰', '😊', '🤤', '😙', '🐣', '🐰', '🐻', '🐼', '🐥', '🐹', '🦊'];
+function cntState(){
+  let c = null; try { c = JSON.parse(lsGet(CNT_KEY) || 'null'); } catch(e){}
+  return Object.assign({ list: [] }, c || {});
+}
+function cntSave(c){ lsSet(CNT_KEY, JSON.stringify(c)); }
+/* 오늘 화면 위 카운팅 버튼 → 화면 절반쯤 올라오는 창 */
+function openCount(){
+  openSheet({ title: '카운팅', html: '<div id="cntBox"></div>', mount(){ $('#sheet').classList.add('cnt-sheet'); renderCnt(); }, save(){} });
+}
+function renderCnt(){
+  const c = cntState(), box = $('#cntBox'); if (!box) return;
+  $('#sheetTitle').innerHTML = `카운팅 <b class="cnt-n">${c.list.length}</b>`;
+  box.innerHTML = `
+    <button class="cnt-pad" id="cntPad" aria-label="하나 세기">
+      <div class="cnt-emos">${c.list.map((e, i) => `<span${i === c.list.length - 1 ? ' class="new"' : ''}>${e}</span>`).join('')}</div>
+      ${c.list.length ? '' : '<p>톡 할 때마다 하나씩 세요</p>'}
+    </button>
+    <div class="cnt-acts"><button id="cntUndo"${c.list.length ? '' : ' disabled'}>↶ 하나 빼기</button><button id="cntReset"${c.list.length ? '' : ' disabled'}>처음부터</button></div>`;
+}
+function cntTap(add){
+  const c = cntState();
+  if (add) { let e; do { e = CNT_EMOJI[Math.floor(Math.random() * CNT_EMOJI.length)]; } while (CNT_EMOJI.length > 1 && e === c.list[c.list.length - 1]); c.list.push(e); }
+  else c.list.pop();
+  cntSave(c); renderCnt();
+}
+
 /* 변화 탭 설정: 목표 체중 */
 function openChgSettings(){
   openSheet({
@@ -2581,6 +2633,13 @@ function bind(){
     loadMonth();
   });
 
+  $('#countBtn').onclick = openCount;
+  $('#sheetBody').addEventListener('click', e => {
+    if (!$('#cntBox')) return;
+    if (e.target.closest('#cntPad')) { cntTap(true); return; }
+    if (e.target.closest('#cntUndo')) { cntTap(false); return; }
+    if (e.target.closest('#cntReset')) { cntSave({ list: [] }); renderCnt(); return; }
+  });
   $('#view-chg').addEventListener('click', e => {
     const cp = e.target.closest('[data-cp]'); if (cp) {
       S.chg.span = CHG_PERIODS.find(x => x[0] === cp.dataset.cp)[2] || null;
