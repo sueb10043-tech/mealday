@@ -520,7 +520,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-03-96';
+const APP_VERSION = '2026-11-03-97';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -693,8 +693,9 @@ function bg(promise){   // 미리보기용 / 목록에 못 적는 경우
     .finally(() => { pendingSaves--; if (!pendingSaves && !flushing) { $('#saving').classList.remove('show'); loadDay(); } });
 }
 let editSeq = 0;   // 저장할 때마다 1씩 늘려서, 그 전에 출발한 '불러오기' 응답이 방금 입력한 내용을 덮어쓰지 않게 해요
+const editAt = {};   // 날짜별 마지막 입력 번호
 function send(action, payload){
-  editSeq++;
+  editSeq++; if (payload && payload.date) editAt[payload.date] = editSeq;
   if (DEMO) return bg(call(action, payload));
   const q = qLoad(); q.push({ action, payload });
   if (!qSave(q)) return bg(call(action, payload));   // 사진이 너무 커서 못 적으면 바로 보내기
@@ -836,20 +837,22 @@ async function loadDay(afterFlush){
     let c = null;
     try { c = JSON.parse(lsGet('md_day_' + date) || 'null'); } catch(e){}
     if (c) { S.day = c; renderToday(); loadPhotos(c.meals); }
-    else if (date > todayStr()) {
-      // 미래 날짜는 기록이 거의 없으니 서버를 기다리지 않고 빈 화면(+급식)을 바로 보여줘요
-      S.day = { date, meals: [], states: [], body: null, activity: null, workouts: [], diary: '' }; renderToday();
-      prefetchRange(date, addDays(date, 7), 0);
+    else {
+      // 저장본이 없는 날도 날짜는 바로 넘어가요: 빈 화면을 먼저 보여주고 서버 기록이 오면 채워요
+      S.day = { date, meals: [], states: [], body: null, activity: null, workouts: [], diary: '', _blank: date <= todayStr() }; renderToday();
+      if (date > todayStr()) prefetchRange(date, addDays(date, 7), 0);
+      else prefetchRange(addDays(date, -14), date, 0);   // 그 앞 2주를 한꺼번에 받아둬요
     }
-    else prefetchRange(addDays(date, -14), date, 0);   // 저장 안 된 날이면 그 앞 2주를 한꺼번에 받아둬요
   }
-  if (!DEMO && !afterFlush && qLoad().length) { flush(); return; }   // 보낼 게 남았으면 먼저 보내고, 끝나면 최신 기록을 받아와요
-  $('#todayBody').style.opacity = S.day && S.day.date === date ? 1 : .5;
+  // 보낼 저장이 남아 있으면 뒤에서 보내고, 날짜 이동·불러오기는 기다리지 않아요
+  if (!DEMO && !afterFlush && qLoad().length) flush();
+  $('#todayBody').style.opacity = S.day && S.day._blank ? .5 : 1;
   try {
     const seq = editSeq;
     const d = await call('getDay', { date });
     if (date !== S.date) return;
-    if (seq !== editSeq || qLoad().length) return;   // 그 사이에 새로 입력한 게 있으면 화면을 그대로 둬요 (저장이 끝나면 다시 받아와요)
+    // 이 날짜에 아직 서버로 안 간 입력이 있거나 방금 새로 입력했으면 화면을 그대로 둬요 (저장이 끝나면 다시 받아와요)
+    if ((editAt[date] || 0) > seq || qLoad().some(x => x.payload && x.payload.date === date)) return;
     S.day = d; if (d.lastSync) S.lastSync = d.lastSync;
     if (!DEMO) lsSet('md_day_' + date, JSON.stringify(d));
     renderToday();
