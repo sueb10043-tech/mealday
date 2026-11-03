@@ -260,7 +260,12 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .chg-seg{display:flex;background:#ecebe7;border-radius:12px;padding:3px;margin:8px 0 10px}
 .chg-seg button{flex:1 1 0;min-width:0;text-align:center;padding:8px 0;border-radius:9px;font-size:15px;font-weight:600;color:#777}
 .chg-seg button.on{background:#fff;color:#111;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.chg-card{padding:12px 12px 8px}
+.chg-card{padding:12px 12px 8px;touch-action:pan-y}
+.chg-bar{display:flex;align-items:center;justify-content:space-between;margin:-2px 2px 0}
+.chg-bar #chgRange{font-size:13px;color:var(--sub);font-weight:600}
+.chg-mini{display:flex;background:#ecebe7;border-radius:9px;padding:2px}
+.chg-mini button{padding:2px 10px;line-height:1.5;border-radius:7px;font-size:13px;font-weight:600;color:#777}
+.chg-mini button.on{background:#fff;color:#111;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .chg-head{display:flex;align-items:baseline;gap:8px;margin:0 4px 6px}
 .chg-n{font-size:15px;font-weight:700;color:#333;white-space:nowrap}
 .chg-tip{flex:1;font-size:12px;color:#7a5c38;font-weight:600;white-space:nowrap;overflow:hidden}
@@ -276,6 +281,8 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .chg-legend i{display:inline-block;vertical-align:middle;margin-right:4px}
 .chg-legend .dot{width:6px;height:6px;border-radius:50%;background:#c9b79c}
 .chg-legend .ln{width:14px;height:3px;border-radius:2px;background:#7a5c38}
+.chg-legend .ln.thin{height:2px}
+.chg-gear{margin-left:auto;width:36px;height:36px;border-radius:50%;background:#F3F1EC;color:#555;display:grid;place-items:center;padding:0!important}
 .goal-row{display:flex;align-items:center;gap:8px;margin:18px 4px 4px;font-size:15px;font-weight:600;color:#333}
 .goal-row input{width:80px;border:0;border-radius:10px;background:#ececec;padding:8px 10px;font-size:15px}
 .goal-row button{margin-left:auto;padding:8px 14px;border-radius:10px;background:#111;color:#fff;font-size:14px;font-weight:600}
@@ -489,7 +496,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-03-74';
+const APP_VERSION = '2026-11-03-78';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1730,7 +1737,7 @@ function parseInBody(text){
 // 한꺼번에 넣은 뒤: 휴대폰에 저장해 둔 달력·하루 기록을 비워서 새로 받아오게
 function clearDataCaches(){
   try { Object.keys(localStorage).forEach(k => { if (/^md_(month|day)_/.test(k)) localStorage.removeItem(k); }); } catch(err){}
-  Object.keys(monthMem).forEach(k => delete monthMem[k]); S.calData = null;
+  Object.keys(monthMem).forEach(k => delete monthMem[k]); S.calData = null; S.chgAll = null;
   Object.keys(fetchedRanges).forEach(k => delete fetchedRanges[k]);
 }
 async function onInBodyPicked(e){
@@ -1795,22 +1802,50 @@ const CHG_METRICS = {
   muscle:  { n: '골격근량', u: 'kg', g: 'comp', good: 1 },
   bmi:     { n: 'BMI', u: '', g: 'comp', good: -1 }
 };
-const CHG_PERIODS = [['1m', '1달', 30], ['3m', '3달', 91], ['6m', '6달', 182], ['all', '전체', 365]];
+const CHG_PERIODS = [['all', '전체', 0], ['1m', '1달', 30], ['3m', '3달', 91], ['6m', '6달', 182]];
 const CHG_GROUPS = [['all', '전체'], ['size', '사이즈'], ['comp', '체성분'], ['act', '활동']];
-S.chg = { period: '3m', group: 'all' };
+S.chg = { span: null, group: 'all', view: 'trend' };   // span: 최근 며칠 (null = 기록 전부)
 const chgPoints = {};   // 카드별 점 (누르면 값 보기용)
 let chgJob = 0;
+// 기록 전부를 한 번 모아 두고(S.chgAll), 기간·확대축소는 그 안에서 잘라 그려요
 async function renderChg(){
-  const job = ++chgJob, P = CHG_PERIODS.find(x => x[0] === S.chg.period), to = todayStr(), from = addDays(to, -(P[2] - 1));
-  const head = `
-    <div class="chg-seg">${CHG_PERIODS.map(([k, n]) => `<button class="${S.chg.period === k ? 'on' : ''}" data-cp="${k}">${n}</button>`).join('')}</div>
-    <div class="cal-sub chg-groups">${CHG_GROUPS.map(([k, n]) => `<button class="${S.chg.group === k ? 'on' : ''}" data-cg="${k}">${n}</button>`).join('')}</div>`;
-  $('#view-chg').innerHTML = head + '<div class="chart"><p class="empty" style="text-align:center">불러오는 중…</p></div>';
-  // 기간에 걸친 달마다 기록 모으기 (한 번 받은 달은 휴대폰에 저장돼 있어서 바로)
-  const months = []; for (let d = from.slice(0, 7) + '-01'; d <= to; ) { months.push(d.slice(0, 7)); const p = d.split('-').map(Number); const n = new Date(p[0], p[1], 1); d = n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-01'; }
+  const job = ++chgJob, to = todayStr();
+  if (!S.chgAll) $('#view-chg').innerHTML = chgHead() + '<div class="chart"><p class="empty" style="text-align:center">불러오는 중…</p></div>';
+  else drawChg();
   const all = {};
-  await Promise.all(months.map(async ym => { let m = monthMem[ym] || monthCache(ym); if (!m) { try { m = await fetchMonth(ym); } catch(e){ m = {}; } } Object.assign(all, m || {}); }));
-  if (job !== chgJob || S.tab !== 'chg') return;
+  // 이번 달은 늘 새로 받아요(방금 입력한 값 반영), 지난 달은 저장본 사용
+  const getM = async ym => { let m = ym === to.slice(0, 7) ? null : (monthMem[ym] || monthCache(ym)); if (!m) { try { m = await fetchMonth(ym); } catch(e){ m = monthMem[ym] || monthCache(ym) || {}; } } return m || {}; };
+  const prevYm = ym => { const p = ym.split('-').map(Number), d = new Date(p[0], p[1] - 2, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
+  const hasBody = m => Object.keys(m).some(d => ['weight', 'bodyFat', 'muscle', 'waist1', 'waist2', 'bmi', 'steps'].some(k => has(m[d][k])) || (m[d].workouts || []).length);
+  // 이번 달부터 거꾸로 3달씩 받아서, 기록 없는 달이 3번 이어지면 멈춰요 (최대 5년)
+  let ym = to.slice(0, 7), empty = 0, n = 0;
+  while (empty < 3 && n < 60) {
+    const batch = []; for (let i = 0; i < 3; i++) { batch.push(ym); ym = prevYm(ym); n++; }
+    const ms = await Promise.all(batch.map(getM));
+    if (job !== chgJob) return;
+    ms.forEach(m => { if (hasBody(m)) { empty = 0; Object.assign(all, m); } else empty++; });
+  }
+  if (job !== chgJob) return;
+  S.chgAll = all;
+  if (S.tab === 'chg') drawChg();
+}
+function chgHead(){
+  const span = S.chg.span, P = CHG_PERIODS.find(x => x[2] === (span || 0));
+  return `
+    <div class="chg-seg">${CHG_PERIODS.map(([k, n, d]) => `<button class="${P && P[0] === k ? 'on' : ''}" data-cp="${k}">${n}</button>`).join('')}</div>
+    <div class="cal-sub chg-groups">${CHG_GROUPS.map(([k, n]) => `<button class="${S.chg.group === k ? 'on' : ''}" data-cg="${k}">${n}</button>`).join('')}<button class="chg-gear" id="chgSet" aria-label="변화 설정"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></div>
+    <div class="chg-bar"><span id="chgRange"></span><div class="chg-mini">${[['trend', '흐름'], ['raw', '실제 값']].map(([k, n]) => `<button class="${(S.chg.view || 'trend') === k ? 'on' : ''}" data-cv="${k}">${n}</button>`).join('')}</div></div>`;
+}
+function chgRange(){
+  const all = S.chgAll || {}, to = todayStr(), ds = Object.keys(all).sort();
+  const first = ds.length ? ds[0] : addDays(to, -29);
+  let from = S.chg.span ? addDays(to, -(S.chg.span - 1)) : first;
+  if (from < first && !S.chg.span) from = first;
+  return { from, to, first, total: dayNum(to) - dayNum(first) + 1 };
+}
+function drawChg(){
+  if (!S.chgAll) return;
+  const all = S.chgAll, { from, to } = chgRange();
   const days = Object.keys(all).filter(d => d >= from && d <= to).sort();
   let body = '';
   const g = S.chg.group;
@@ -1819,14 +1854,37 @@ async function renderChg(){
     body += keys.map(k => chgCard(k, days.filter(d => has(all[d][k])).map(d => ({ d, v: +all[d][k] })), from, to)).join('');
   }
   if (g === 'all' || g === 'act') body += chgActivity(all, days, from, to);
-  if (g === 'all' || g === 'size') body += `<div class="goal-row"><span>목표 체중</span><input id="goalIn" inputmode="decimal" placeholder="예: 54" value="${esc(S.settings.goalWeight || '')}"><span>kg</span><button id="goalOk">저장</button></div>
-    <p class="hint">목표를 넣으면 체중 그래프에 점선으로 보여요. 비우고 저장하면 지워져요.</p>`;
-  $('#view-chg').innerHTML = head + body;
+  $('#view-chg').innerHTML = chgHead() + body;
+  const md = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  $('#chgRange').textContent = `${md(from)} ~ ${md(to)} · ${dayNum(to) - dayNum(from) + 1}일`;
+}
+/* 변화 탭 설정: 목표 체중 */
+function openChgSettings(){
+  openSheet({
+    title: '변화 설정',
+    html: `<div class="group"><div class="field"><span>목표 체중</span><span style="display:flex;align-items:center;gap:6px"><input id="goalIn" class="plain" inputmode="decimal" placeholder="예: 54" style="width:90px;text-align:right" value="${esc(S.settings.goalWeight || '')}"><span class="sub">kg</span></span></div></div>
+      <p class="hint">목표를 넣으면 체중 그래프에 파란 점선으로 보여요. 비우고 저장하면 지워져요.</p>`,
+    save(){
+      const v = $('#goalIn').value.trim().replace(/[^\d.]/g, '');
+      S.settings.goalWeight = v && +v > 0 ? String(+v) : ''; saveSettings();
+      if (S.tab === 'chg') drawChg();
+    }
+  });
 }
 function chgWeekly(pts){
   const by = {};
   pts.forEach(p => { const w = weekStartOf(p.d); (by[w] = by[w] || []).push(p.v); });
   return Object.keys(by).sort().map(w => ({ d: addDays(w, 3), v: by[w].reduce((a, b) => a + b, 0) / by[w].length }));
+}
+// 아래 날짜: 기간에 맞춰 5~6개, 겹치지 않게
+function chgXLabels(from, to, X, H){
+  const n = dayNum(to) - dayNum(from), cnt = n < 6 ? n + 1 : 6, md = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  let o = '';
+  for (let i = 0; i < cnt; i++) {
+    const d = addDays(from, Math.round(n * i / Math.max(1, cnt - 1)));
+    o += `<line x1="${X(d).toFixed(1)}" x2="${X(d).toFixed(1)}" y1="${H - 22}" y2="${H - 19}" stroke="#cfcac0"/><text x="${X(d).toFixed(1)}" y="${H - 5}" font-size="10" fill="#9a9a9e" text-anchor="${i === 0 ? 'start' : i === cnt - 1 ? 'end' : 'middle'}">${md(d)}</text>`;
+  }
+  return o;
 }
 function dayNum(d){ const p = d.split('-').map(Number); return Date.UTC(p[0], p[1] - 1, p[2]) / 864e5; }
 function chgCard(k, pts, from, to){
@@ -1850,20 +1908,24 @@ function chgCard(k, pts, from, to){
     const pad_ = (mx - mn) * 0.08; mn -= pad_; mx += pad_;
     const x0 = dayNum(from), x1 = dayNum(to);
     const X = d => L + (dayNum(d) - x0) / Math.max(1, x1 - x0) * (W - L - R), Y = v => T + (mx - v) / (mx - mn) * (H - T - B);
-    const wk = chgWeekly(pts);
+    const wk = chgWeekly(pts), raw = S.chg.view === 'raw';
     let o = '';
-    [mx - pad_, (mx + mn) / 2, mn + pad_].forEach(v => { o += `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#e6e3dc"/><text x="${L - 6}" y="${(Y(v) + 4).toFixed(1)}" font-size="10" fill="#9a9a9e" text-anchor="end">${v.toFixed(1)}</text>`; });
+    [0, 1, 2, 3, 4].map(i => (mx - pad_) - ((mx - pad_) - (mn + pad_)) * i / 4).forEach(v => { o += `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#e6e3dc"/><text x="${L - 6}" y="${(Y(v) + 4).toFixed(1)}" font-size="10" fill="#9a9a9e" text-anchor="end">${v.toFixed(1)}</text>`; });
     if (goal) o += `<line x1="${L}" x2="${W - R}" y1="${Y(goal).toFixed(1)}" y2="${Y(goal).toFixed(1)}" stroke="#2F6FE0" stroke-dasharray="4 4" stroke-width="1.3"/><text x="${W - R}" y="${(Y(goal) - 4).toFixed(1)}" font-size="10" fill="#2F6FE0" text-anchor="end">목표 ${goal}</text>`;
-    o += pts.map(p => `<circle cx="${X(p.d).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="2.2" fill="#c9b79c"/>`).join('');
-    if (wk.length >= 2) o += `<polyline points="${wk.map(p => X(p.d).toFixed(1) + ',' + Y(p.v).toFixed(1)).join(' ')}" fill="none" stroke="#7a5c38" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
-    const md = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`, mid = addDays(from, Math.round((x1 - x0) / 2));
-    o += [[from, 'start'], [mid, 'middle'], [to, 'end']].map(([d, a]) => `<text x="${X(d).toFixed(1)}" y="${H - 5}" font-size="10" fill="#9a9a9e" text-anchor="${a}">${md(d)}</text>`).join('');
+    if (raw) {   // 실제 값: 잰 날을 모두 이어요
+      o += `<polyline points="${pts.map(p => X(p.d).toFixed(1) + ',' + Y(p.v).toFixed(1)).join(' ')}" fill="none" stroke="#7a5c38" stroke-width="1.6" stroke-linejoin="round"/>`;
+      if (pts.length <= 60) o += pts.map(p => `<circle cx="${X(p.d).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="2.4" fill="#7a5c38"/>`).join('');
+    } else {     // 흐름: 날마다 값은 연한 점, 주별 평균은 굵은 선
+      o += pts.map(p => `<circle cx="${X(p.d).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="2.2" fill="#c9b79c"/>`).join('');
+      if (wk.length >= 2) o += `<polyline points="${wk.map(p => X(p.d).toFixed(1) + ',' + Y(p.v).toFixed(1)).join(' ')}" fill="none" stroke="#7a5c38" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
+    o += chgXLabels(from, to, X, H);
     o += `<g class="scrub" style="display:none"><line y1="${T}" y2="${H - B}" stroke="#111" stroke-width="1"/><circle r="4" fill="#111"/></g>`;
     chgPoints[k] = { pts, X, Y, L, R, W, u: M.u };
     svg = `<svg class="chg-svg" data-ck="${k}" viewBox="0 0 ${W} ${H}">${o}</svg>`;
   }
   return `<div class="chart chg-card"><div class="chg-head"><span class="chg-n">${M.n}</span><span class="chg-tip" id="tip-${k}"></span><span class="chg-v">${headR}</span></div>${svg}
-    ${pts.length >= 2 ? '<div class="chg-legend"><span><i class="dot"></i>날마다 잰 값</span><span><i class="ln"></i>주별 평균</span></div>' : ''}</div>`;
+    ${pts.length >= 2 ? (S.chg.view === 'raw' ? '<div class="chg-legend"><span><i class="ln thin"></i>잰 값 그대로</span></div>' : '<div class="chg-legend"><span><i class="dot"></i>날마다 잰 값</span><span><i class="ln"></i>주별 평균</span></div>') : ''}</div>`;
 }
 function chgActivity(all, days, from, to){
   const by = {};
@@ -2415,16 +2477,42 @@ function bind(){
   });
 
   $('#view-chg').addEventListener('click', e => {
-    const cp = e.target.closest('[data-cp]'); if (cp) { S.chg.period = cp.dataset.cp; renderChg(); return; }
-    const cg = e.target.closest('[data-cg]'); if (cg) { S.chg.group = cg.dataset.cg; renderChg(); return; }
-    if (e.target.closest('#goalOk')) {
-      const v = $('#goalIn').value.trim().replace(/[^\d.]/g, '');
-      S.settings.goalWeight = v && +v > 0 ? String(+v) : ''; saveSettings(); renderChg();
-      toast(S.settings.goalWeight ? `목표 체중 ${S.settings.goalWeight}kg` : '목표 체중을 지웠어요');
+    const cp = e.target.closest('[data-cp]'); if (cp) {
+      S.chg.span = CHG_PERIODS.find(x => x[0] === cp.dataset.cp)[2] || null;
+      S.chg.view = cp.dataset.cp === '1m' ? 'raw' : 'trend';   // 1달은 실제 값, 나머지는 흐름이 기본
+      drawChg(); return;
+    }
+    const cg = e.target.closest('[data-cg]'); if (cg) { S.chg.group = cg.dataset.cg; drawChg(); return; }
+    const cv = e.target.closest('[data-cv]'); if (cv) { S.chg.view = cv.dataset.cv; drawChg(); return; }
+    if (e.target.closest('#chgSet')) openChgSettings();
+  });
+  // 두 손가락으로 벌리면 최근 쪽으로 확대(기간이 짧아지고), 오므리면 기록 전체까지 넓어져요
+  const pinch = new Map(); let pz = null, pzRaf = 0;
+  const vc = $('#view-chg');
+  vc.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.chg-card')) return;
+    pinch.set(e.pointerId, e.clientX);
+    if (pinch.size === 2) {
+      const xs = [...pinch.values()], rg = chgRange();
+      pz = { d: Math.abs(xs[0] - xs[1]) || 1, span: S.chg.span || rg.total, total: rg.total };
+      try { [...pinch.keys()].forEach(id => vc.setPointerCapture(id)); } catch(err){}
     }
   });
-  $('#view-chg').addEventListener('pointerdown', chgScrub);
-  $('#view-chg').addEventListener('pointermove', e => { if (e.buttons || e.pointerType === 'touch') chgScrub(e); });
+  vc.addEventListener('pointermove', e => {
+    if (!pinch.has(e.pointerId)) return;
+    pinch.set(e.pointerId, e.clientX);
+    if (pinch.size !== 2 || !pz) return;
+    const xs = [...pinch.values()], d = Math.abs(xs[0] - xs[1]) || 1;
+    let span = Math.round(pz.span * pz.d / d);
+    span = Math.max(7, Math.min(pz.total, span));
+    const next = span >= pz.total ? null : span;
+    if (next !== S.chg.span) { S.chg.span = next; cancelAnimationFrame(pzRaf); pzRaf = requestAnimationFrame(drawChg); }
+  });
+  const pend = e => { pinch.delete(e.pointerId); if (pinch.size < 2) pz = null; };
+  vc.addEventListener('pointerup', pend); vc.addEventListener('pointercancel', pend);
+  vc.addEventListener('gesturestart', e => e.preventDefault());   // 아이폰 Safari 화면 확대 막기
+  vc.addEventListener('pointerdown', chgScrub);
+  $('#view-chg').addEventListener('pointermove', e => { if (!pz && (e.buttons || e.pointerType === 'touch')) chgScrub(e); });
 
   $('#view-set').addEventListener('click', async e => {
     const el = e.target.closest('[data-act]'); if (!el) return;
