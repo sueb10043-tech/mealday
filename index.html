@@ -40,7 +40,8 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .date-row{gap:6px}
 .date-l{display:flex;align-items:center;gap:4px;min-width:0}
 .day-score{flex:none;font-size:19px;line-height:1;padding:2px 0;border-radius:12px;letter-spacing:-1px}
-.day-score.empty{width:30px;height:30px;padding:0;font-size:17px;font-weight:500;color:#a58b6a;border:1.5px dashed #cdb894;border-radius:50%;display:grid;place-items:center}
+.day-score.empty{width:32px;height:32px;padding:0;border:0;background:none;letter-spacing:0;display:block;line-height:0}
+.day-score.empty svg{display:block}
 .score-pick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 12px}
 .score-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 0 14px;border-radius:20px;background:#fff;border:2px solid transparent}
 .score-btn span{font-size:38px;line-height:1}
@@ -148,7 +149,7 @@ h1.big{font-size:42px;font-weight:800;letter-spacing:-1.2px;margin:8px 0 6px}
 .grab{width:44px;height:5px;border-radius:3px;background:#c9c9c9;margin:10px auto 4px}
 .sheet-head{display:flex;justify-content:space-between;align-items:center;padding:6px 16px 10px 22px}
 .sheet-head h3{margin:0;font-size:20px;font-weight:700}
-.pill-btn{padding:10px 18px;border-radius:999px;background:#e4e4e4;font-weight:500}
+.pill-btn{height:40px;padding:0 18px;border-radius:999px;background:#e4e4e4;font-weight:500;display:inline-flex;align-items:center;justify-content:center;line-height:1}   /* ✕ 버튼(40px)과 같은 높이 */
 .pill-btn.primary{background:#111;color:#fff;font-weight:600}
 .pill-btn:disabled{background:#e4e4e4;color:#aaa}
 .sheet-body{overflow-y:auto;padding:8px 16px 28px;-webkit-overflow-scrolling:touch}
@@ -518,7 +519,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-03-89';
+const APP_VERSION = '2026-11-03-93';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1000,16 +1001,19 @@ function stateEntries(d){
 }
 // 하루 점수 3단계
 const SCORES = { 3: { e: '🥰', n: '최고' }, 2: { e: '😐', n: '보통' }, 1: { e: '🥶', n: '아쉬움' } };
-const DRINK = '‼️';
+const DRINK = '🍺';        // 오늘의 점수 (점수 창 · 날짜 옆 · 공유 이미지)
+const DRINK_CAL = '‼️';    // 기록 달력에서만
+// 빈 점수 버튼: 점선 원과 ＋를 그림으로 그려서 정확히 동그랗고 가운데에 오게 (점선 18칸 균등)
+const SCORE_EMPTY = (() => { const c = 2 * Math.PI * 14, d = (c / 36).toFixed(3);
+  return `<svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="#cdb894" stroke-width="1.5" stroke-dasharray="${d} ${d}"/><path d="M16 10.5v11M10.5 16h11" stroke="#a58b6a" stroke-width="1.6" stroke-linecap="round"/></svg>`; })();
 function dayDrink(d){ return !!(d && d.activity && +d.activity.drink); }
 function scoreIcons(score, drink){ return (SCORES[score] ? SCORES[score].e : '') + (drink ? DRINK : ''); }
 function dayScore(d){ return String((d && d.activity && d.activity.score) || ''); }
 function openScoreSheet(){
-  const a0 = S.day.activity || {};
+  // 고르기만 하고, '저장'을 눌러야 저장돼요 (다른 입력창들과 같게)
   let cur = dayScore(S.day), drink = dayDrink(S.day);
   openSheet({
     title: '오늘의 점수',
-    saveLabel: '닫기',
     html: `<div class="score-pick" id="scorePick"></div>`,
     mount(){
       const paint = () => {
@@ -1017,19 +1021,19 @@ function openScoreSheet(){
           + `<button class="score-btn drink${drink ? ' on' : ''}" data-drink="1"><span>${DRINK}</span><b>술</b></button>`;
       };
       paint();
-      const save = (f) => {
-        const a = S.day.activity || (S.day.activity = { date: S.date });
-        Object.assign(a, f); renderToday(); cacheDay();
-        send('saveScore', Object.assign({ date: S.date }, f));
-      };
       $('#scorePick').onclick = e => {
         const b = e.target.closest('button'); if (!b) return;
-        if (b.dataset.score) { cur = cur === b.dataset.score ? '' : b.dataset.score; save({ score: cur }); }
-        else { drink = !drink; save({ drink: drink ? '1' : '' }); }
+        if (b.dataset.score) cur = cur === b.dataset.score ? '' : b.dataset.score;   // 같은 걸 다시 누르면 해제
+        else drink = !drink;
         paint();
       };
     },
-    save(){}
+    save(){
+      const a = S.day.activity || (S.day.activity = { date: S.date });
+      a.score = cur; a.drink = drink ? '1' : '';
+      renderToday(); cacheDay();
+      send('saveScore', { date: S.date, score: cur, drink: drink ? '1' : '' });
+    }
   });
 }
 // 보이는 모양만 바꿔요 (저장은 그대로 💩👍/💩👎): 좋음 🩵, 나쁨 🩶
@@ -1075,7 +1079,7 @@ function renderToday(){
   const d = S.day; if (!d) return;
   const today = todayStr(), isToday = S.date === today;
   $('#dayDate').textContent = korDate(S.date);
-  { const ic = scoreIcons(dayScore(d), dayDrink(d)); $('#dayScore').innerHTML = ic || '＋'; $('#dayScore').classList.toggle('empty', !ic); }
+  { const ic = scoreIcons(dayScore(d), dayDrink(d)); $('#dayScore').innerHTML = ic || SCORE_EMPTY; $('#dayScore').classList.toggle('empty', !ic); }
   $('#todayBtn').disabled = isToday;
 
   const lbl = isToday ? '오늘의 ' : '';
@@ -1738,7 +1742,7 @@ function renderCal(data){
     const tl = info.toilet || [];
     // 점수는 칸 배경색(최고 하늘 · 보통 연노랑 · 아쉬움 연분홍), 날짜 옆엔 ‼️(술), 같은 줄 오른쪽 끝에 💪 / 아래 줄: 배변 하트
     const dots = (tl.some(t => t !== '👎') ? '<i>🩵</i>' : '') + (tl.indexOf('👎') >= 0 ? '<i>🩶</i>' : '');
-    const exHtml = (+info.drink ? `<span class="cex">${DRINK}</span>` : '') + ((info.workouts || []).length ? '<span class="cmus">💪</span>' : '');
+    const exHtml = (+info.drink ? `<span class="cex">${DRINK_CAL}</span>` : '') + ((info.workouts || []).length ? '<span class="cmus">💪</span>' : '');
     const scoreCls = tab === 'all' && SCORES[info.score] ? ' sc' + info.score : '';
     const wd = new Date(y, m - 1, d).getDay();
     const inner = tab === 'all'
