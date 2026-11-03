@@ -466,7 +466,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-03-69';
+const APP_VERSION = '2026-11-03-70';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1992,12 +1992,13 @@ async function drawExport(dayArg){
     if (p.length) info.push(['신체', p.join('  ·  ')]);
   }
   if (S.exOpt.act) {
-    const act = [];
-    if (d.activity && has(d.activity.steps)) act.push(`${Number(d.activity.steps).toLocaleString('ko-KR')}걸음`);
-    d.workouts.forEach(w => act.push(w.name + (workoutText(w) ? ' ' + workoutText(w) : '')));
-    const kcalSum = d.workouts.reduce((x, w) => x + (+w.kcal || 0), 0);
-    if (kcalSum) act.push(`합계 ${kcalSum.toLocaleString('ko-KR')}kcal`);
-    if (act.length) info.push(['운동', act.join('  ·  ')]);
+    // 걸음 → 총 칼로리 → 운동마다 한 줄씩 (운동은 안쪽으로 들여서)
+    const act = [], ws = d.workouts || [];
+    if (d.activity && has(d.activity.steps)) act.push(`👟 ${Number(d.activity.steps).toLocaleString('ko-KR')}걸음`);
+    const kcalSum = ws.reduce((x, w) => x + (+w.kcal || 0), 0);
+    if (kcalSum) act.push(`🔥 총 ${kcalSum.toLocaleString('ko-KR')}kcal`);
+    ws.forEach(w => act.push('\t' + workoutIcon(w.name) + ' ' + w.name + ' ' + [has(w.kcal) ? w.kcal + 'kcal' : '', has(w.minutes) ? w.minutes + '분' : ''].filter(Boolean).join(' · ')));
+    if (act.length) info.push(['운동', act.join('\n')]);
   }
 
   const c = document.createElement('canvas'); c.width = W; c.height = 400;
@@ -2016,7 +2017,12 @@ async function drawExport(dayArg){
     if (info.length) {
       const LW = 120, valW = W - 2 * P - 48 - LW;
       ctx.font = `400 32px ${F}`;
-      const rows = info.map(r => ({ k: r[0], ls: r[1].split('\n').reduce((a, s) => a.concat(wrap(ctx, s, valW)), []) }));
+      // '\t'로 시작하는 줄은 안쪽으로 들여 써요 (운동 목록)
+      const IND = 44;
+      const rows = info.map(r => ({ k: r[0], ls: r[1].split('\n').reduce((a, s) => {
+        const ind = s.charAt(0) === '\t', t = ind ? s.slice(1) : s;
+        return a.concat(wrap(ctx, t, valW - (ind ? IND : 0)).map(x => ({ t: x, ind })));
+      }, []) }));
       const boxH = 32 + rows.reduce((a, r) => a + r.ls.length * 46, 0) + (rows.length - 1) * 18 + 26;
       if (draw) {
         ctx.fillStyle = '#F6F5F2'; rr(ctx, P, y, W - 2 * P, boxH, 32); ctx.fill();
@@ -2024,7 +2030,7 @@ async function drawExport(dayArg){
         rows.forEach(r => {
           ctx.font = `700 30px ${F}`; ctx.fillStyle = '#8e8e93'; ctx.fillText(r.k, P + 28, yy + 2);
           ctx.font = `400 32px ${F}`; ctx.fillStyle = '#222';
-          r.ls.forEach((l, i) => ctx.fillText(l, P + 28 + LW, yy + i * 46));
+          r.ls.forEach((l, i) => ctx.fillText(l.t, P + 28 + LW + (l.ind ? IND : 0), yy + i * 46));
           yy += r.ls.length * 46 + 18;
         });
       }
