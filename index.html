@@ -541,7 +541,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-03-101';
+const APP_VERSION = '2026-11-04-105';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1786,7 +1786,7 @@ function renderCal(data){
     const scoreCls = tab === 'all' && SCORES[info.score] ? ' sc' + info.score : '';
     const wd = new Date(y, m - 1, d).getDay();
     const inner = tab === 'all'
-      ? `<span class="dn">${d}${exHtml}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="bv mono">${(+info.weight).toFixed(1)}<small>kg</small></span>` : ''}${has(info.waist1) || has(info.waist2) ? `<span class="bv mono">${has(info.waist1) ? (+info.waist1).toFixed(1) : '-'}/${has(info.waist2) ? (+info.waist2).toFixed(1) : '-'}</span>` : ''}`
+      ? `<span class="dn">${d}${exHtml}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="bv mono">${(+info.weight).toFixed(1)}<small>kg</small></span>` : '<span class="bv">&nbsp;</span>'}${has(info.waist1) || has(info.waist2) ? `<span class="bv mono">${has(info.waist1) ? (+info.waist1).toFixed(1) : '-'}/${has(info.waist2) ? (+info.waist2).toFixed(1) : '-'}</span>` : ''}`
       : `<span class="dn">${d}</span>${detail(info)}`;
     cells += `<button class="cell${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}${scoreCls}" data-date="${ds}">${inner}</button>`;
   }
@@ -2301,7 +2301,7 @@ async function openExport(){
   if (!S.day) return;
   $('#ex').classList.remove('hidden');
   S.exDay = S.day; $('#exDayLbl').textContent = korDate(S.day.date);
-  S.exOpt = { state: false, body: false, act: true, meal: true, diary: false };
+  S.exOpt = { state: false, wt: true, waist: false, comp: false, act: true, meal: true, diary: false };
   paintExOpts();
   S.exMode = 'day'; S.exWeek = weekStartOf(S.date);
   document.querySelectorAll('.ex-mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === 'day'));
@@ -2317,7 +2317,7 @@ async function openExport(){
   await drawExport();
 }
 
-const EX_ITEMS = [['state', '상태'], ['body', '신체'], ['act', '운동'], ['meal', '식사'], ['diary', '일기']];
+const EX_ITEMS = [['state', '상태'], ['wt', '체중'], ['waist', '허리 치수'], ['comp', '체성분'], ['act', '운동'], ['meal', '식사'], ['diary', '일기']];
 function paintExOpts(){
   const all = EX_ITEMS.every(([k]) => S.exOpt[k]);
   $('#exOpts').innerHTML = `<button class="ex-opt${all ? ' on' : ''}" data-k="all">전체</button>` + EX_ITEMS.map(([k, n]) => `<button class="ex-opt${S.exOpt[k] ? ' on' : ''}" data-k="${k}">${n}</button>`).join('');
@@ -2338,15 +2338,21 @@ async function drawExport(dayArg){
     if (ents.length) info.push(['상태', ents.map(x => isToilet(x.l) && x.time ? `${showLabel(x.l)} ${korTime(x.time)}` : showLabel(x.l)).join('  ·  ')]);
     if (waterMl(d)) info.push(['물', fmtMl(waterMl(d))]);
   }
-  if (S.exOpt.body) {
-    const p = [];
-    if (has(b.weight)) p.push(`체중 ${(+b.weight).toFixed(1)}kg`);
-    if (has(b.bodyFat)) p.push(`체지방률 ${(+b.bodyFat).toFixed(1)}%`);
-    if (has(b.bmi)) p.push(`BMI ${(+b.bmi).toFixed(1)}`);
-    if (has(b.muscle)) p.push(`골격근량 ${(+b.muscle).toFixed(1)}kg`);
-    if (has(b.waist1)) p.push(`허리1 ${(+b.waist1).toFixed(1)}cm`);
-    if (has(b.waist2)) p.push(`허리2 ${(+b.waist2).toFixed(1)}cm`);
-    if (p.length) info.push(['신체', p.join('  ·  ')]);
+  {
+    // 신체: 첫 줄 = 체중 · 허리1 · 허리2 / 둘째 줄 = 체성분 (체지방률 · BMI · 골격근량) — 고른 항목만
+    const l1 = [], l2 = [];
+    if (S.exOpt.wt && has(b.weight)) l1.push(`체중 ${(+b.weight).toFixed(1)}kg`);
+    if (S.exOpt.waist) {
+      if (has(b.waist1)) l1.push(`허리1 ${(+b.waist1).toFixed(1)}cm`);
+      if (has(b.waist2)) l1.push(`허리2 ${(+b.waist2).toFixed(1)}cm`);
+    }
+    if (S.exOpt.comp) {
+      if (has(b.bodyFat)) l2.push(`체지방률 ${(+b.bodyFat).toFixed(1)}%`);
+      if (has(b.bmi)) l2.push(`BMI ${(+b.bmi).toFixed(1)}`);
+      if (has(b.muscle)) l2.push(`골격근량 ${(+b.muscle).toFixed(1)}kg`);
+    }
+    const bl = [l1.join('  ·  '), l2.join('  ·  ')].filter(Boolean);
+    if (bl.length) info.push(['신체', bl.join('\n')]);
   }
   if (S.exOpt.act) {
     // 걸음 → 총 칼로리 → 운동마다 한 줄씩 (운동은 안쪽으로 들여서)
