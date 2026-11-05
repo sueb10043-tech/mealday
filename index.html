@@ -561,7 +561,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-04-107';
+const APP_VERSION = '2026-11-05-109';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1547,8 +1547,9 @@ function openMealSheet(meal){
           const line = r.dishes.join('\n');   // 메뉴만 한 줄에 하나씩
           const ta = $('#mMemo');
           ta.value = ta.value.trim() ? ta.value.trim() + '\n' + line : line; growMemo();
-          const lunchTag = S.settings.tags.find(t => t.name === '점심');
+          const lunchTag = S.settings.tags.find(t => String(t.name).trim() === '본능식');   // 급식은 '본능식' 태그로
           if (lunchTag && sel.indexOf(lunchTag.id) < 0) { sel.push(lunchTag.id); paintTag(); }
+          $('#mTime').value = '12:10';   // 급식 먹는 시간으로 맞춰요
         } catch(e){ fail(e); }
         finally { lb.disabled = false; }
       };
