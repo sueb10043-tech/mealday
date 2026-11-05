@@ -427,8 +427,9 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .pe-stage{flex:1;position:relative;min-height:0}
 .pe-wrap{position:absolute}
 .pe-wrap canvas{display:block;width:100%;height:100%}
-.pe-box{position:absolute;border:1.5px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);touch-action:none}
+.pe-box{position:absolute;border:1.5px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);touch-action:none;pointer-events:none}
 .pe-wrap{overflow:hidden}
+.pe-stage{touch-action:none}
 .pe-h{position:absolute;width:34px;height:34px;touch-action:none}
 .pe-h::after{content:'';position:absolute;width:18px;height:18px;border:4px solid #fff}
 .pe-h.tl{left:-8px;top:-8px}.pe-h.tl::after{left:4px;top:4px;border-right:0;border-bottom:0}
@@ -561,7 +562,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-05-109';
+const APP_VERSION = '2026-11-06-110';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -1290,12 +1291,26 @@ function openPhotoEditor(src){
       };
       const paint = () => Object.assign(box.style, { left: crop.x * W + 'px', top: crop.y * H + 'px', width: crop.w * W + 'px', height: crop.h * H + 'px' });
       layout();
-      // 끌기: 상자 안 = 옮기기, 모서리 = 크기 조절
+      // 끌기: 변·모서리 근처(손가락 넓이만큼) = 그쪽 크기 조절, 상자 안쪽 = 옮기기
+      // 손잡이 그림이 아니라 '위치'로 판단해서, 변 아무 데나 잡아도 되고 사진 가장자리 바깥쪽을 눌러도 잡혀요
       let drag = null;
-      const MIN = 0.08, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+      const MIN = 0.08, clamp = (v, a, b) => Math.max(a, Math.min(b, v)), T = 30;
       const down = e => {
-        const h = e.target.closest('[data-h]'); if (!h && !e.target.closest('.pe-box')) return;
-        e.preventDefault(); drag = { h: h ? h.dataset.h : 'move', x: e.clientX, y: e.clientY, c: Object.assign({}, crop) };
+        if (!e.target.closest('.pe-stage')) return;
+        const r = box.getBoundingClientRect(), px = e.clientX, py = e.clientY;
+        const inX = px > r.left - T && px < r.right + T, inY = py > r.top - T && py < r.bottom + T;
+        if (!inX || !inY) return;
+        const dl = Math.abs(px - r.left), dr = Math.abs(px - r.right), dt = Math.abs(py - r.top), db = Math.abs(py - r.bottom);
+        let hx = '', hy = '';
+        if (Math.min(dl, dr) < T) hx = dl <= dr ? 'l' : 'r';
+        if (Math.min(dt, db) < T) hy = dt <= db ? 't' : 'b';
+        // 작은 상자에서 안쪽 깊숙이 누르면 옮기기
+        if (hx && px > r.left + T * 0.6 && px < r.right - T * 0.6 && r.width < T * 3) hx = '';
+        if (hy && py > r.top + T * 0.6 && py < r.bottom - T * 0.6 && r.height < T * 3) hy = '';
+        const inside = px >= r.left && px <= r.right && py >= r.top && py <= r.bottom;
+        if (!hx && !hy && !inside) return;
+        e.preventDefault();
+        drag = { h: hx || hy ? hx + hy : 'move', x: px, y: py, c: Object.assign({}, crop) };
       };
       const move = e => {
         if (!drag) return; e.preventDefault();
@@ -1303,10 +1318,11 @@ function openPhotoEditor(src){
         let { x, y, w, h } = c;
         if (drag.h === 'move') { x = clamp(c.x + dx, 0, 1 - c.w); y = clamp(c.y + dy, 0, 1 - c.h); }
         else {
-          if (drag.h[1] === 'l') { x = clamp(c.x + dx, 0, c.x + c.w - MIN); w = c.x + c.w - x; }
-          else w = clamp(c.w + dx, MIN, 1 - c.x);
-          if (drag.h[0] === 't') { y = clamp(c.y + dy, 0, c.y + c.h - MIN); h = c.y + c.h - y; }
-          else h = clamp(c.h + dy, MIN, 1 - c.y);
+          const hs = drag.h;
+          if (hs.includes('l')) { x = clamp(c.x + dx, 0, c.x + c.w - MIN); w = c.x + c.w - x; }
+          else if (hs.includes('r')) w = clamp(c.w + dx, MIN, 1 - c.x);
+          if (hs.includes('t')) { y = clamp(c.y + dy, 0, c.y + c.h - MIN); h = c.y + c.h - y; }
+          else if (hs.includes('b')) h = clamp(c.h + dy, MIN, 1 - c.y);
         }
         crop = { x, y, w, h }; paint();
       };
