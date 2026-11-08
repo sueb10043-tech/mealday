@@ -378,6 +378,7 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 
 .saving{position:fixed;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);background:rgba(20,20,20,.75);color:#fff;font-size:12px;padding:5px 12px;border-radius:999px;z-index:65;opacity:0;transition:opacity .2s;pointer-events:none}
 .saving.show{opacity:1}
+.saving.wait{pointer-events:auto;background:rgba(180,60,40,.9)}
 .toast{position:fixed;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:rgba(20,20,20,.88);color:#fff;padding:11px 18px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:70;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%)}
 
@@ -562,7 +563,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-06-110';
+const APP_VERSION = '2026-11-08-111';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -732,55 +733,122 @@ function fail(e){ toast('오류: ' + ((e && e.message) || e)); }
  * 보낼 내용은 먼저 휴대폰에 '보낼 목록'으로 적어 두고 차례로 보내요.
  * 보내는 중에 앱을 닫아도 다음에 열 때 남은 것부터 다시 보내요. */
 function qLoad(){ try { return JSON.parse(localStorage.getItem('md_queue') || '[]'); } catch(e){ return []; } }
-function qSave(q){ try { localStorage.setItem('md_queue', JSON.stringify(q)); return true; } catch(e){ return false; } }
+function qSave(q){ try { localStorage.setItem('md_queue', JSON.stringify(q)); qBadge(); return true; } catch(e){ return false; } }
+
+/* 보낼 사진은 '보낼 목록'(작은 저장소)에 직접 넣지 않고, 큰 저장소(IndexedDB 'outbox')에 따로 먼저 적어 둬요.
+ * 목록에는 사진의 이름표(ref)만 적어서, 사진이 커도 목록이 넘치지 않아요.
+ * 서버 저장이 끝난 뒤에만 지워요 → 앱이 닫히거나 인터넷이 끊겨도 사진이 남아 있어요. */
+const memOut = {};   // 앱이 켜져 있는 동안의 사본
+let outboxWrites = Promise.resolve();
+async function outboxPut(map){
+  let ok = false;
+  try {
+    const db = await idb();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('outbox', 'readwrite'), st = tx.objectStore('outbox');
+      Object.keys(map).forEach(k => st.put(map[k], k));
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
+    });
+    ok = true;
+  } catch(e){}
+  if (!ok) Object.keys(map).forEach(k => { try { localStorage.setItem('md_ob_' + k, map[k]); } catch(e){} });   // 큰 저장소가 안 열리면 작은 저장소에라도
+}
+async function outboxGet(k){
+  if (memOut[k]) return memOut[k];
+  try {
+    const db = await idb();
+    const v = await new Promise(res => { const q = db.transaction('outbox').objectStore('outbox').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); });
+    if (v) return v;
+  } catch(e){}
+  try { return localStorage.getItem('md_ob_' + k); } catch(e){ return null; }
+}
+async function outboxDel(keys){
+  keys.forEach(k => { delete memOut[k]; try { localStorage.removeItem('md_ob_' + k); } catch(e){} });
+  try { const db = await idb(), st = db.transaction('outbox', 'readwrite').objectStore('outbox'); keys.forEach(k => st.delete(k)); } catch(e){}
+}
+const refsOf = it => ((it.payload && it.payload.items) || []).map(x => x.ref).filter(Boolean);
+// 목록의 이름표를 실제 사진으로 바꿔서 보낼 준비
+async function hydrate(payload){
+  if (!payload || !Array.isArray(payload.items) || !payload.items.some(x => x.ref)) return payload;
+  const items = [];
+  for (const x of payload.items) {
+    if (!x.ref) { items.push(x); continue; }
+    const data = await outboxGet(x.ref);
+    if (!data) throw new Error('보낼 사진을 휴대폰에서 찾지 못했어요');
+    const y = Object.assign({}, x, { data }); delete y.ref; items.push(y);
+  }
+  return Object.assign({}, payload, { items });
+}
+
 let pendingSaves = 0;
-function bg(promise){   // 미리보기용 / 목록에 못 적는 경우
-  pendingSaves++; $('#saving').classList.add('show');
+// 화면 위 알림: 보내는 중 → '저장 중…', 못 보낸 게 남아 있으면 → '저장 대기 n개' (누르면 다시 보내요)
+function qBadge(){
+  const el = $('#saving'); if (!el) return;
+  const n = DEMO ? 0 : qLoad().length;
+  if (flushing || pendingSaves) { el.textContent = n > 1 ? `저장 중… (${n})` : '저장 중…'; el.classList.add('show'); el.classList.remove('wait'); }
+  else if (n) { el.textContent = `저장 대기 ${n}개 · 눌러서 다시 보내기`; el.classList.add('show', 'wait'); }
+  else { el.textContent = '저장 중…'; el.classList.remove('show', 'wait'); }
+}
+function bg(promise){   // 미리보기용
+  pendingSaves++; qBadge();
   return promise.catch(e => { toast('저장하지 못했어요: ' + ((e && e.message) || e)); })
-    .finally(() => { pendingSaves--; if (!pendingSaves && !flushing) { $('#saving').classList.remove('show'); loadDay(); } });
+    .finally(() => { pendingSaves--; qBadge(); if (!pendingSaves && !flushing) loadDay(); });
 }
 let editSeq = 0;   // 저장할 때마다 1씩 늘려서, 그 전에 출발한 '불러오기' 응답이 방금 입력한 내용을 덮어쓰지 않게 해요
 const editAt = {};   // 날짜별 마지막 입력 번호
 function send(action, payload){
   editSeq++; if (payload && payload.date) editAt[payload.date] = editSeq;
   if (DEMO) return bg(call(action, payload));
-  const q = qLoad(); q.push({ action, payload });
-  if (!qSave(q)) return bg(call(action, payload));   // 사진이 너무 커서 못 적으면 바로 보내기
+  let p = payload;
+  if (payload && Array.isArray(payload.items) && payload.items.some(x => x.data)) {
+    const map = {};
+    p = Object.assign({}, payload, { items: payload.items.map(x => {
+      if (!x.data) return x;
+      const k = 'ob' + tmpId(); map[k] = x.data;
+      const y = Object.assign({}, x, { ref: k }); delete y.data; return y;
+    }) });
+    Object.assign(memOut, map);
+    outboxWrites = outboxWrites.then(() => outboxPut(map));
+  }
+  const q = qLoad(); q.push({ action, payload: p, qid: tmpId() });
+  if (!qSave(q)) {   // 아주 드물게 목록조차 못 적으면: 화면을 켜 둔 동안 보내고 실패는 크게 알려줘요
+    hydrate(p).then(full => bg(call(action, full).then(res => { if (action === 'saveMeal') keepSentPhotos(full, res); outboxDel(refsOf({ payload: p })); })));
+    toast('휴대폰 저장 공간이 부족해요. 저장 중… 이 사라질 때까지 앱을 닫지 마세요');
+    return;
+  }
   flush();
 }
 let flushing = false;
 async function flush(){
   if (flushing || DEMO) return;
-  if (!qLoad().length) return;
-  flushing = true; $('#saving').classList.add('show');
+  if (!qLoad().length) { qBadge(); return; }
+  flushing = true; qBadge();
   try {
+    await outboxWrites.catch(() => {});
+    const failed = new Set();   // 이번 차례에 실패한 항목 (한 바퀴 돌면 멈춰요)
     while (true) {
       const q = qLoad(); if (!q.length) break;
+      const it = q[0];
+      if (it.qid && failed.has(it.qid)) break;   // 한 바퀴 다 돌았어요
       try {
-        const res = await call(q[0].action, q[0].payload);
-        if (q[0].action === 'saveMeal') keepSentPhotos(q[0].payload, res);
-        const q2 = qLoad(); q2.shift(); qSave(q2);
+        const full = await hydrate(it.payload);
+        const res = await call(it.action, full);
+        if (it.action === 'saveMeal') keepSentPhotos(full, res);
+        const q2 = qLoad(); const done = q2.shift(); qSave(q2);
+        outboxDel(refsOf(done || it));
       } catch(e){
-        // 같은 항목이 3번 실패하면 목록에서 빼고 이유를 알려줘요 (계속 막혀 있지 않도록)
         const q2 = qLoad(); if (!q2.length) break;
-        q2[0].tries = (q2[0].tries || 0) + 1;
-        const msg = (e && e.message) || e;
-        // 서버(Code.gs)가 아직 옛 버전이라 모르는 요청이면 버리지 않고 맨 뒤로 보내 둬요 → 새 버전 배포 후 다음에 열 때 저장돼요
-        if (/알 수 없는 요청/.test(msg)) {
-          const it = q2.shift(); it.tries = 0; q2.push(it); qSave(q2);
-          toast('서버(Code.gs)를 새 버전으로 배포하면 저장돼요');
-          if (q2.every(x => /알 수 없는 요청/.test(x.lastErr || '') || x === it)) { it.lastErr = msg; qSave(q2); break; }
-          it.lastErr = msg; qSave(q2); continue;
-        }
-        if (q2[0].tries >= 3) { q2.shift(); qSave(q2); toast('저장하지 못한 기록이 있어요: ' + msg); continue; }
-        qSave(q2);
-        toast('아직 저장하지 못했어요. 다음에 다시 보낼게요');
-        break;
+        const msg = String((e && e.message) || e);
+        const x = q2.shift(); x.tries = (x.tries || 0) + 1; x.lastErr = msg; x.qid = x.qid || tmpId();
+        // 실패해도 절대 버리지 않아요. 맨 뒤로 보내서 다른 기록이 먼저 저장되게 하고, 다음에 다시 보내요
+        q2.push(x); qSave(q2); failed.add(x.qid);
+        if (/알 수 없는 요청/.test(msg)) toast('서버(Code.gs)를 새 버전으로 배포하면 저장돼요');
+        else if (/Failed to fetch|NetworkError|Load failed|network|시간/i.test(msg)) { toast('인터넷이 연결되면 다시 보낼게요'); break; }
+        else if (x.tries >= 3) toast('아직 저장하지 못한 기록이 있어요: ' + msg);
       }
     }
   } finally {
-    flushing = false;
-    if (!pendingSaves) $('#saving').classList.remove('show');
+    flushing = false; qBadge();
     loadDay(true);   // 보낸 뒤에는 늘 서버의 최신 기록을 받아와요
   }
 }
@@ -935,7 +1003,7 @@ function idb(){
   // 일부 아이폰에서 저장 공간 열기가 멈추는 경우가 있어서, 1.5초 안에 안 열리면 건너뛰어요
   if (!idbP) idbP = Promise.race([
     new Promise((res, rej) => {
-      try { const r = indexedDB.open('mealday', 1); r.onupgradeneeded = () => r.result.createObjectStore('photos'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked')); }
+      try { const r = indexedDB.open('mealday', 2); r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('photos')) d.createObjectStore('photos'); if (!d.objectStoreNames.contains('outbox')) d.createObjectStore('outbox'); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked')); }
       catch(e){ rej(e); }
     }),
     new Promise((_, rej) => setTimeout(() => rej(new Error('idb timeout')), 1500))
@@ -2855,7 +2923,11 @@ function bind(){
   $('#exWeekNav').onclick = e => { const b = e.target.closest('[data-wk]'); if (!b) return; S.exWeek = addDays(S.exWeek, 7 * +b.dataset.wk); drawWeek(); };
   $('#exOpts').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; const k = b.dataset.k; if (k === 'all') EX_ITEMS.forEach(([x]) => S.exOpt[x] = true); else S.exOpt[k] = !S.exOpt[k]; paintExOpts(); drawExport(); };
 
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkUpdate(); if (!DEMO && qLoad().length) flush(); } });
+  window.addEventListener('online', () => { if (!DEMO && qLoad().length) flush(); });
+  setInterval(() => { if (!DEMO && qLoad().length && navigator.onLine !== false) flush(); }, 60000);   // 못 보낸 게 있으면 1분마다 다시
+  $('#saving').onclick = () => { if (!flushing && qLoad().length) { toast('다시 보내는 중이에요'); flush(); } };
+  qBadge();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && S.settings && S.tab === 'today' && !sheetCtx) loadDay();
   });
