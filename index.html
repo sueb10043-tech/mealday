@@ -260,6 +260,23 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .sum-sc span b{font-size:15px}
 .sum-sc .sc3{background:#E3F2FA}.sum-sc .sc2{background:#FFF5D6}.sum-sc .sc1{background:#FBE6EC}
 .cell .dn{align-self:stretch;padding-right:3px}
+.cell .dnum{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 2px;border-radius:11px;margin-left:-4px}
+.cell{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.cell.lp{transform:scale(.94);transition:transform .15s}
+.cell.has-note .dnum{box-shadow:inset 0 0 0 1.7px var(--nc,#CF7A5C)}   /* 메모한 날: 날짜에 동그라미 (메모마다 색 고르기) */
+.note-it .cdot{flex:none;width:9px;height:9px;border-radius:50%;margin-top:6px;margin-left:-2px}
+.ncols{display:flex;flex-wrap:wrap;gap:10px;padding:6px 16px 14px}
+.ncols button{width:34px;height:34px;border-radius:50%;box-shadow:inset 0 0 0 3px #fff}
+.ncols button.on{outline:2.5px solid #111;outline-offset:1px}
+.note-box{margin-top:10px;background:var(--soft);border-radius:18px;padding:10px 14px 6px}
+.note-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.note-h .sum-t{font-size:12px}
+.note-add{padding:5px 11px;border-radius:999px;background:#111;color:#fff;font-size:12.5px;font-weight:700}
+.note-it{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;padding:9px 0;border-top:1px solid #e9e6e0;font-size:14px;line-height:1.45}
+.note-it:first-of-type{border-top:none}
+.note-it .d{flex:none;width:40px;color:#8a7a66;font-size:12.5px;font-weight:700;padding-top:1px}
+.note-it .t{flex:1;min-width:0;white-space:pre-wrap;word-break:break-all;color:#333}
+.note-empty{font-size:13px;color:var(--sub);padding:6px 0 8px}
 .cell .cmus{margin-left:auto;font-size:11px;line-height:1}
 .cell.today .dn{font-weight:800}
 .cell.sun .dn{color:#E5484D}
@@ -564,7 +581,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-10-114';
+const APP_VERSION = '2026-11-11-119';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -578,7 +595,7 @@ const demoApi = (() => {
   ];
   const db = {
     settings: { tags, weekStart:'mon', chips:['💩👍','💩👎','더부룩함','가스참'], shortcutName:'mealday 동기화' },
-    meals: [], states: [], workouts: [], body: {}, activity: {}, diary: {}, photos: {}, lastSync: ''
+    meals: [], states: [], workouts: [], body: {}, activity: {}, diary: {}, notes: [], photos: {}, lastSync: ''
   };
   let seq = 0; const nid = () => 'd' + (++seq) + Date.now().toString(36);
   const menus = [
@@ -614,6 +631,7 @@ const demoApi = (() => {
     if (i % 3 === 0) db.workouts.push({ id:nid(), date:d, time:'19:00', name: i % 2 ? '걷기(인클라인)' : '전신근력운동', minutes:35, kcal: 120 + (i * 37) % 120, source:'manual' });
   }
   db.diary[today] = '미리보기용 예시 일기예요. 실제 배포하면 내 기록이 보여요.';
+  db.notes.push({ id: 'n1', date: addDays(today, -1), text: '💊 라브 섭취 시작' });
   db.lastSync = today + ' 07:35';
   const byTime = (a, b) => String(a.time).localeCompare(String(b.time));
   return function(action, p){
@@ -656,6 +674,8 @@ const demoApi = (() => {
       }
       case 'deleteWorkout': db.workouts = db.workouts.filter(x => x.id !== p.id); return true;
       case 'saveDiary': db.diary[p.date] = p.text || ''; return true;
+      case 'saveNote': { const n = db.notes.find(x => x.id === p.id); if (n) Object.assign(n, { date: p.date, text: p.text, color: p.color }); else db.notes.push({ id: p.id, date: p.date, text: p.text, color: p.color }); return true; }
+      case 'deleteNote': db.notes = db.notes.filter(x => x.id !== p.id); return true;
       case 'saveWater': {
         const log = (p.log || []).filter(n => n > 0);
         db.activity[p.date] = Object.assign({ date:p.date }, db.activity[p.date], { water:String(log.reduce((a, n) => a + n, 0)), waterLog:log.join(',') });
@@ -673,12 +693,14 @@ const demoApi = (() => {
         db.workouts.filter(w => inM(w.date)).forEach(w => at(w.date).workouts.push({ name:w.name, minutes:w.minutes, kcal:w.kcal }));
         Object.values(db.activity).filter(a => inM(a.date)).forEach(a => { at(a.date).steps = a.steps; at(a.date).score = a.score; at(a.date).drink = a.drink; });
         Object.values(db.body).filter(b => inM(b.date)).forEach(b => { const o = at(b.date); o.weight = b.weight; o.bodyFat = b.bodyFat; o.bmi = b.bmi; o.muscle = b.muscle; o.waist1 = b.waist1; o.waist2 = b.waist2; o.waist = has(b.waist1) || has(b.waist2) ? 1 : 0; });
+        db.notes.filter(n => inM(n.date)).forEach(n => { const o = at(n.date); (o.notes = o.notes || []).push({ id: n.id, text: n.text, color: n.color }); });
         return days;
       }
       case 'search': {
         const ws = String(p.q || '').toLowerCase().split(/\s+/).filter(Boolean), hit = t => { t = String(t || '').toLowerCase(); return ws.some(w => t.indexOf(w) >= 0); };
         return { meals: db.meals.filter(m => hit(m.memo)).map(m => ({ id:m.id, date:m.date, time:m.time, tag:m.tag, memo:m.memo })),
-                 diary: Object.keys(db.diary).filter(d => hit(db.diary[d])).map(d => ({ date:d, text:db.diary[d] })) };
+                 diary: Object.keys(db.diary).filter(d => hit(db.diary[d])).map(d => ({ date:d, text:db.diary[d] })),
+                 notes: db.notes.filter(n => hit(n.text)).map(n => ({ id:n.id, date:n.date, text:n.text })) };
       }
       case 'saveSettings': db.settings = p.settings; return db.settings;
       case 'searchSchool': return [
@@ -954,7 +976,7 @@ function pill(t){ return t.name ? `<span class="tag-pill" style="background:${t.
 /* ───── 오늘 화면 ───── */
 // 보내는 중인 저장이 화면의 어느 칸을 바꾸는지
 const PEND_FIELD = { saveMeal: 'meals', deleteMeal: 'meals', saveState: 'states', deleteState: 'states', saveBody: 'body',
-  saveWater: 'activity', saveScore: 'activity', saveWorkout: 'workouts', deleteWorkout: 'workouts', saveDiary: 'diary', saveSettings: 'none' };
+  saveWater: 'activity', saveScore: 'activity', saveWorkout: 'workouts', deleteWorkout: 'workouts', saveDiary: 'diary', saveSettings: 'none', saveNote: 'none', deleteNote: 'none' };
 async function loadDay(afterFlush){
   const date = S.date;
   if (!DEMO && (!S.day || S.day.date !== date)) {
@@ -1670,7 +1692,7 @@ function openMealSheet(meal){
           const line = r.dishes.join('\n');   // 메뉴만 한 줄에 하나씩
           const ta = $('#mMemo');
           ta.value = ta.value.trim() ? ta.value.trim() + '\n' + line : line; growMemo();
-          const lunchTag = S.settings.tags.find(t => String(t.name).trim() === '본능식');   // 급식은 '본능식' 태그로
+          const lunchTag = S.settings.tags.find(t => String(t.name).trim() === '점심');   // 급식은 '점심' 태그로
           if (lunchTag && sel.indexOf(lunchTag.id) < 0) { sel.push(lunchTag.id); paintTag(); }
           $('#mTime').value = '12:10';   // 급식 먹는 시간으로 맞춰요
         } catch(e){ fail(e); }
@@ -1872,6 +1894,61 @@ async function loadMonth(){
   [-1, 1].forEach(k => { const d = new Date(p[0], p[1] - 1 + k, 1); const y2 = d.getFullYear() + '-' + pad(d.getMonth() + 1);
     if (!monthCache(y2) && y2 <= todayStr().slice(0, 7)) fetchMonth(y2).catch(() => {}); });
 }
+/* 메모: 변화를 준 날(예: 라브 먹기 시작) — 달력엔 날짜 동그라미, 내용은 달력 아래 '메모' 칸에 */
+// 동그라미 색: 점수 배경(하늘 · 연노랑 · 연분홍)과 안 겹치는 차분한 색
+const NOTE_COLORS = ['#CF7A5C', '#7FA67A', '#4E9A96', '#9787D4', '#4F5D8A', '#A88B72'];   // 테라코타(기본) 세이지 틸 라벤더 네이비 모카
+const NOTE_OLD = { '#E0663A': '#CF7A5C', '#E5484D': '#CF7A5C', '#E8B10E': '#A88B72', '#2FA36B': '#7FA67A', '#3A8FE0': '#4F5D8A', '#8A5CF6': '#9787D4', '#B88A5A': '#A88B72' };
+const noteColor = n => { const c = n && n.color; return NOTE_COLORS.indexOf(c) >= 0 ? c : (NOTE_OLD[c] || NOTE_COLORS[0]); };
+function notesBoxHtml(data, keys){
+  const items = [];
+  keys.forEach(k => (data[k].notes || []).forEach(n => items.push(Object.assign({ date: k }, n))));
+  const md = d => +d.slice(5, 7) + '/' + +d.slice(8);
+  return `<div class="note-box"><div class="note-h"><span class="sum-t">메모</span><button class="note-add" data-act="noteAdd">＋ 메모</button></div>
+    ${items.length ? items.map(n => `<button class="note-it" data-note="${esc(n.id)}" data-nd="${n.date}"><span class="cdot" style="background:${noteColor(n)}"></span><span class="d">${md(n.date)}</span><span class="t">${esc(n.text)}</span></button>`).join('')
+      : '<p class="note-empty">변화를 준 날을 적어 두면 달력 날짜에 동그라미가 생겨요.</p>'}</div>`;
+}
+// 달력에 바로 반영 (서버 저장은 뒤에서)
+function patchMonthNote(date, id, text, color){
+  const ym = date.slice(0, 7);
+  const data = monthMem[ym] || monthCache(ym) || (S.calData && S.calData.ym === ym ? S.calData.data : null) || {};
+  Object.keys(data).forEach(k => { if (data[k].notes) data[k].notes = data[k].notes.filter(n => n.id !== id); });
+  if (text != null) { const o = data[date] = data[date] || { meals: 0, states: 0, toilet: [], labels: [], workouts: [] }; (o.notes = o.notes || []).push({ id, text, color }); }
+  monthMem[ym] = data;
+  if (!DEMO) lsSet('md_month_' + ym, JSON.stringify(data));
+  if (S.calData && S.calData.ym === ym) S.calData.data = data;
+  return data;
+}
+function openNote(id, date){
+  const data = (S.calData && S.calData.data) || {};
+  const cur = id ? ((data[date] && data[date].notes) || []).find(n => n.id === id) : null;
+  const d0 = date || (S.ym === todayStr().slice(0, 7) ? todayStr() : S.ym + '-01');
+  openSheet({
+    title: cur ? '메모 수정' : '메모 추가',
+    html: `<div class="group"><div class="field"><span>날짜</span><input type="date" id="nDate" value="${d0}"></div></div>
+      <textarea id="nText" placeholder="예: 💊 라브 섭취 시작">${cur ? esc(cur.text) : ''}</textarea>
+      <div class="group" style="margin-top:10px"><div class="group-label">동그라미 색</div><div class="ncols" id="nCols">${NOTE_COLORS.map(c => `<button type="button" data-c="${c}" style="background:${c}" class="${c === noteColor(cur) ? 'on' : ''}"></button>`).join('')}</div></div>
+      ${cur ? '<button class="del-btn" id="nDel">이 메모 삭제</button>' : ''}`,
+    mount(){
+      const t = $('#nText'); if (!cur) setTimeout(() => t.focus(), 50);
+      $('#nCols').onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; document.querySelectorAll('#nCols button').forEach(x => x.classList.toggle('on', x === b)); };
+      if (cur) armDelete($('#nDel'), () => {
+        patchMonthNote(date, cur.id, null); send('deleteNote', { id: cur.id, date });
+        closeSheet(); renderCal(S.calData && S.calData.data);
+      });
+    },
+    save(){
+      const text = $('#nText').value.trim(), nd = $('#nDate').value || d0;
+      if (!text) { toast('내용을 적어 주세요'); return false; }
+      const nid = cur ? cur.id : 'n' + tmpId();
+      if (cur && nd.slice(0, 7) !== date.slice(0, 7)) patchMonthNote(date, nid, null);   // 다른 달로 옮기면 원래 달에서 빼요
+      const on = $('#nCols .on'), color = on ? on.dataset.c : NOTE_COLORS[0];
+      patchMonthNote(nd, nid, text, color);
+      send('saveNote', { id: nid, date: nd, text, color });
+      if (nd.slice(0, 7) !== S.ym) { S.ym = nd.slice(0, 7); loadMonth(); } else renderCal(S.calData && S.calData.data);
+    }
+  });
+}
+
 function renderCal(data){
   if (data) S.calData = { ym: S.ym, data };
   else if (S.calData && S.calData.ym === S.ym) data = S.calData.data;
@@ -1935,9 +2012,11 @@ function renderCal(data){
     const scoreCls = tab === 'all' && SCORES[info.score] ? ' sc' + info.score : '';
     const wd = new Date(y, m - 1, d).getDay();
     const inner = tab === 'all'
-      ? `<span class="dn">${d}${exHtml}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="bv mono">${(+info.weight).toFixed(1)}<small>kg</small></span>` : '<span class="bv">&nbsp;</span>'}${has(info.waist1) || has(info.waist2) ? `<span class="bv mono">${has(info.waist1) ? (+info.waist1).toFixed(1) : '-'}/${has(info.waist2) ? (+info.waist2).toFixed(1) : '-'}</span>` : ''}`
+      ? `<span class="dn"><span class="dnum">${d}</span>${exHtml}</span><span class="cdots">${dots}</span>${has(info.weight) ? `<span class="bv mono">${(+info.weight).toFixed(1)}<small>kg</small></span>` : '<span class="bv">&nbsp;</span>'}${has(info.waist1) || has(info.waist2) ? `<span class="bv mono">${has(info.waist1) ? (+info.waist1).toFixed(1) : '-'}/${has(info.waist2) ? (+info.waist2).toFixed(1) : '-'}</span>` : ''}`
       : `<span class="dn">${d}</span>${detail(info)}`;
-    cells += `<button class="cell${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}${scoreCls}" data-date="${ds}">${inner}</button>`;
+    const noteCls = tab === 'all' && (info.notes || []).length ? ' has-note' : '';
+    const noteSty = noteCls ? ` style="--nc:${noteColor(info.notes[0])}"` : '';
+    cells += `<button class="cell${noteCls}${ds === today ? ' today' : ''}${ds > today ? ' future' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}${scoreCls}" data-date="${ds}"${noteSty}>${inner}</button>`;
   }
   // 달력 아래 한 줄 요약
   const keys = data ? Object.keys(data).filter(k => k.indexOf(S.ym) === 0).sort() : [];
@@ -1950,7 +2029,7 @@ function renderCal(data){
     below = `<div class="sum-row">
       <div class="sum-box grow"><span class="sum-t">이번 달 점수</span><div class="sum-sc">${[3, 2, 1].map(k => `<span class="sc${k}">${SCORES[k].e} <b>${sc[k]}</b>일</span>`).join('')}</div></div>
       <div class="sum-box"><span class="sum-t">이번 달 운동</span><b>💪 ${exDays}일</b></div>
-    </div>`;
+    </div>` + notesBoxHtml(data, keys);
   }
   else if (tab === 'state') {
     let good = 0, bad = 0; const cnt = {};
@@ -2793,7 +2872,7 @@ function srchHl(text, ws, snip){
 function renderSrch(){
   const v = $('#view-srch');
   if (!$('#srchForm')) {
-    v.innerHTML = `<form id="srchForm" class="srch-bar" autocomplete="off"><input id="srchQ" type="search" enterkeyhint="search" placeholder="식사 메모 · 일기에서 찾기"><button type="submit">검색</button></form><div id="srchRes"></div>`;
+    v.innerHTML = `<form id="srchForm" class="srch-bar" autocomplete="off"><input id="srchQ" type="search" enterkeyhint="search" placeholder="식사 메모 · 일기 · 달력 메모에서 찾기"><button type="submit">검색</button></form><div id="srchRes"></div>`;
     $('#srchForm').onsubmit = e => { e.preventDefault(); $('#srchQ').blur(); doSearch($('#srchQ').value); };
     $('#srchRes').onclick = e => { const b = e.target.closest('[data-date]'); if (b) { S.date = b.dataset.date; setTab('today'); } };
     if (S.srch) $('#srchQ').value = S.srch.q;
@@ -2803,24 +2882,26 @@ function renderSrch(){
 function paintSrch(){
   const box = $('#srchRes'); if (!box) return;
   const st = S.srch;
-  if (!st) { box.innerHTML = '<p class="srch-hint">식사 메모와 일기에서 키워드가 들어간 기록을 찾아요.<br>여러 낱말을 띄어 쓰면 하나라도 들어간 기록을 모두 찾아요.</p>'; return; }
+  if (!st) { box.innerHTML = '<p class="srch-hint">식사 메모 · 일기 · 달력 메모에서 키워드가 들어간 기록을 찾아요.<br>여러 낱말을 띄어 쓰면 하나라도 들어간 기록을 모두 찾아요.</p>'; return; }
   if (st.loading) { box.innerHTML = '<p class="srch-sum">찾는 중…</p>'; return; }
   if (st.err) { box.innerHTML = `<p class="srch-hint">${esc(st.err)}</p>`; return; }
   const ws = srchWords(st.q), r = st.res || { meals: [], diary: [] };
   const days = {};
   (r.meals || []).forEach(m => (days[m.date] = days[m.date] || { m: [], d: '' }).m.push(m));
   (r.diary || []).forEach(x => (days[x.date] = days[x.date] || { m: [], d: '' }).d = x.text);
+  (r.notes || []).forEach(x => { const o = days[x.date] = days[x.date] || { m: [], d: '' }; (o.n = o.n || []).push(x.text); });
   const ds = Object.keys(days).sort().reverse();
-  const nm = (r.meals || []).length, nd = (r.diary || []).length;
+  const nm = (r.meals || []).length, nd = (r.diary || []).length, nn = (r.notes || []).length;
   if (!ds.length) { box.innerHTML = `<p class="srch-sum">'${esc(st.q)}' 찾은 기록이 없어요</p>`; return; }
-  box.innerHTML = `<p class="srch-sum">${ds.length}일 · 식사 ${nm}개 · 일기 ${nd}개</p>` + ds.map(d => {
+  box.innerHTML = `<p class="srch-sum">${ds.length}일 · 식사 ${nm}개 · 일기 ${nd}개${nn ? ` · 메모 ${nn}개` : ''}</p>` + ds.map(d => {
     const x = days[d], y = d.slice(0, 4);
     const meals = x.m.sort((a, b) => String(a.time).localeCompare(String(b.time))).map(m => {
       const t = getTag(m.tag);
       return `<div class="sr-it"><div class="sr-meta"><span class="sr-tag" style="background:${t.color}">${t.emoji} ${esc(t.name)}</span>${m.time ? korTime(m.time) : ''}</div><div class="sr-txt">${srchHl(m.memo, ws)}</div></div>`;
     }).join('');
     const diary = x.d ? `<div class="sr-it"><div class="sr-meta"><span class="sr-tag">📔 일기</span></div><div class="sr-txt">${srchHl(x.d, ws, true)}</div></div>` : '';
-    return `<button class="sr-day" data-date="${d}"><div class="sr-date">${korDate(d)}${y !== todayStr().slice(0, 4) ? `<small>${y}년</small>` : ''}</div>${meals}${diary}</button>`;
+    const notes = (x.n || []).map(t => `<div class="sr-it"><div class="sr-meta"><span class="sr-tag" style="background:#FCEBE4">📌 메모</span></div><div class="sr-txt">${srchHl(t, ws)}</div></div>`).join('');
+    return `<button class="sr-day" data-date="${d}"><div class="sr-date">${korDate(d)}${y !== todayStr().slice(0, 4) ? `<small>${y}년</small>` : ''}</div>${notes}${meals}${diary}</button>`;
   }).join('');
 }
 async function doSearch(q){
@@ -2889,13 +2970,32 @@ function bind(){
     }
   });
 
+  // 달력 날짜를 꾹 누르면(0.5초) 그 날짜로 메모 쓰기 — 이미 메모가 있으면 그 메모를 열어요
+  let lpT = null, lpX = 0, lpY = 0, lpFired = false;   // lpFired: 꾹 누른 직후 따라오는 '탭'은 무시
+  const lpCancel = () => { clearTimeout(lpT); lpT = null; };
+  $('#view-cal').addEventListener('pointerdown', e => {
+    const cell = e.target.closest('.cell[data-date]'); if (!cell) return;
+    lpX = e.clientX; lpY = e.clientY; lpCancel(); lpFired = false;
+    lpT = setTimeout(() => {
+      lpT = null; lpFired = true;
+      const d = cell.dataset.date, data = (S.calData && S.calData.data) || {}, ns = (data[d] && data[d].notes) || [];
+      cell.classList.add('lp'); setTimeout(() => cell.classList.remove('lp'), 250);
+      openNote(ns.length ? ns[0].id : null, d);
+    }, 500);
+  });
+  $('#view-cal').addEventListener('pointermove', e => { if (lpT && Math.hypot(e.clientX - lpX, e.clientY - lpY) > 10) lpCancel(); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('#view-cal').addEventListener(t, lpCancel));
+  $('#view-cal').addEventListener('contextmenu', e => { if (e.target.closest('.cell')) e.preventDefault(); });
   $('#view-cal').addEventListener('click', e => {
     const ct = e.target.closest('[data-ctab]');
     if (ct) { S.calTab = ct.dataset.ctab; lsSet('md_caltab', S.calTab); S.calBody = 'wt'; renderCal(monthCache(S.ym)); return; }
     const cb = e.target.closest('[data-cbody]');
     if (cb) { S.calBody = cb.dataset.cbody; renderCal(monthCache(S.ym)); return; }
+    const ni = e.target.closest('[data-note]');
+    if (ni) { openNote(ni.dataset.note, ni.dataset.nd); return; }
+    if (e.target.closest('[data-act="noteAdd"]')) { openNote(null); return; }
     const cell = e.target.closest('[data-date]');
-    if (cell) { S.date = cell.dataset.date; setTab('today'); return; }
+    if (cell) { if (lpFired) { lpFired = false; return; } S.date = cell.dataset.date; setTab('today'); return; }
     const el = e.target.closest('[data-act]'); if (!el) return;
     const p = S.ym.split('-').map(Number);
     const nd = new Date(p[0], p[1] - 1 + (el.dataset.act === 'mnext' ? 1 : -1), 1);
