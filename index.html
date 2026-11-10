@@ -564,7 +564,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-08-112';
+const APP_VERSION = '2026-11-10-114';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -782,12 +782,11 @@ async function hydrate(payload){
 }
 
 let pendingSaves = 0;
-// 화면 위 알림: 보내는 중 → '저장 중…', 못 보낸 게 남아 있으면 → '저장 대기 n개' (누르면 다시 보내요)
+// 화면 위 알림: 보내는 중에만 '저장 중…' (실패해서 기다리는 동안은 아무것도 안 띄우고 알아서 다시 보내요)
 function qBadge(){
   const el = $('#saving'); if (!el) return;
   const n = DEMO ? 0 : qLoad().length;
   if (flushing || pendingSaves) { el.textContent = n > 1 ? `저장 중… (${n})` : '저장 중…'; el.classList.add('show'); el.classList.remove('wait'); }
-  else if (n) { el.textContent = `저장 대기 ${n}개 · 눌러서 다시 보내기`; el.classList.add('show', 'wait'); }
   else { el.textContent = '저장 중…'; el.classList.remove('show', 'wait'); }
 }
 function bg(promise){   // 미리보기용
@@ -843,13 +842,19 @@ async function flush(){
         const x = q2.shift(); x.tries = (x.tries || 0) + 1; x.lastErr = msg; x.qid = x.qid || tmpId();
         // 실패해도 절대 버리지 않아요. 맨 뒤로 보내서 다른 기록이 먼저 저장되게 하고, 다음에 다시 보내요
         q2.push(x); qSave(q2); failed.add(x.qid);
-        if (/알 수 없는 요청/.test(msg)) toast('서버(Code.gs)를 새 버전으로 배포하면 저장돼요');
-        else if (/Failed to fetch|NetworkError|Load failed|network|시간/i.test(msg)) { toast('인터넷이 연결되면 다시 보낼게요'); break; }
-        else if (x.tries >= 3) toast('아직 저장하지 못한 기록이 있어요: ' + msg);
+        if (/알 수 없는 요청/.test(msg) && !flush.warned) { flush.warned = 1; toast('서버(Code.gs)를 새 버전으로 배포하면 저장돼요'); }
+        else if (/Failed to fetch|NetworkError|Load failed|network|시간/i.test(msg)) break;   // 인터넷 문제면 잠시 뒤 다시
       }
     }
   } finally {
     flushing = false; qBadge();
+    // 남은 게 있으면 알아서 다시 보내요: 3초 → 10초 → 30초 → 그 뒤로 1분마다
+    clearTimeout(flush.timer);
+    if (qLoad().length) {
+      const waits = [3000, 10000, 30000, 60000];
+      flush.timer = setTimeout(flush, waits[Math.min(flush.round || 0, waits.length - 1)]);
+      flush.round = (flush.round || 0) + 1;
+    } else flush.round = 0;
     loadDay(true);   // 보낸 뒤에는 늘 서버의 최신 기록을 받아와요
   }
 }
@@ -947,6 +952,9 @@ function tagsOf(v){ return tagIdsOf(v).map(getTag); }
 function pill(t){ return t.name ? `<span class="tag-pill" style="background:${t.color}">${esc(t.emoji)} ${esc(t.name)}</span>` : ''; }
 
 /* ───── 오늘 화면 ───── */
+// 보내는 중인 저장이 화면의 어느 칸을 바꾸는지
+const PEND_FIELD = { saveMeal: 'meals', deleteMeal: 'meals', saveState: 'states', deleteState: 'states', saveBody: 'body',
+  saveWater: 'activity', saveScore: 'activity', saveWorkout: 'workouts', deleteWorkout: 'workouts', saveDiary: 'diary', saveSettings: 'none' };
 async function loadDay(afterFlush){
   const date = S.date;
   if (!DEMO && (!S.day || S.day.date !== date)) {
@@ -967,10 +975,20 @@ async function loadDay(afterFlush){
     const seq = editSeq;
     const d = await call('getDay', { date });
     if (date !== S.date) return;
-    // 이 날짜에 아직 서버로 안 간 입력이 있거나 방금 새로 입력했으면 화면을 그대로 둬요 (저장이 끝나면 다시 받아와요)
-    if ((editAt[date] || 0) > seq || qLoad().some(x => x.payload && x.payload.date === date)) return;
-    S.day = d; if (d.lastSync) S.lastSync = d.lastSync;
-    if (!DEMO) lsSet('md_day_' + date, JSON.stringify(d));
+    if (d.lastSync) S.lastSync = d.lastSync;
+    // 방금 새로 입력했으면 화면을 그대로 둬요 (저장이 끝나면 다시 받아와요)
+    if ((editAt[date] || 0) > seq) return;
+    // 아직 서버로 안 간 입력이 있으면, 그 칸(예: 식사)만 휴대폰 것을 쓰고 나머지(예: 동기화된 체중)는 서버 것으로 바꿔요
+    const pend = qLoad().filter(x => x.payload && x.payload.date === date);
+    let nd = d;
+    if (pend.length) {
+      const keys = new Set(pend.map(x => PEND_FIELD[x.action] || '*'));
+      if (keys.has('*') || !S.day || S.day.date !== date) return;
+      nd = Object.assign({}, d);
+      keys.forEach(k => { if (k !== 'none') nd[k] = S.day[k]; });
+    }
+    S.day = nd;
+    if (!DEMO && !pend.length) lsSet('md_day_' + date, JSON.stringify(d));
     renderToday();
     loadPhotos(d.meals);
   } catch(e){ fail(e); }
@@ -2988,10 +3006,20 @@ function bind(){
   $('#exWeekNav').onclick = e => { const b = e.target.closest('[data-wk]'); if (!b) return; S.exWeek = addDays(S.exWeek, 7 * +b.dataset.wk); drawWeek(); };
   $('#exOpts').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; const k = b.dataset.k; if (k === 'all') EX_ITEMS.forEach(([x]) => S.exOpt[x] = true); else S.exOpt[k] = !S.exOpt[k]; paintExOpts(); drawExport(); };
 
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkUpdate(); if (!DEMO && qLoad().length) flush(); } });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') {
+    checkUpdate();
+    if (DEMO) return;
+    if (qLoad().length) flush();   // 보내고 나면 알아서 다시 받아와요
+    else if (S.tab === 'today' && !sheetCtx) loadDay();   // 인바디·단축어에서 돌아오면 최신 기록으로
+  } });
   window.addEventListener('online', () => { if (!DEMO && qLoad().length) flush(); });
   setInterval(() => { if (!DEMO && qLoad().length && navigator.onLine !== false) flush(); }, 60000);   // 못 보낸 게 있으면 1분마다 다시
-  $('#saving').onclick = () => { if (!flushing && qLoad().length) { toast('다시 보내는 중이에요'); flush(); } };
+  $('#saving').onclick = () => {
+    if (flushing || !qLoad().length) return;
+    const err = qLoad().map(x => x.lastErr).filter(Boolean)[0];
+    toast(err ? '다시 보내는 중이에요 (지난 오류: ' + err + ')' : '다시 보내는 중이에요');
+    flush();
+  };
   qBadge();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && S.settings && S.tab === 'today' && !sheetCtx) loadDay();
