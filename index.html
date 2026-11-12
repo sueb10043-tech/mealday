@@ -202,7 +202,8 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .sw{width:40px;height:40px;border-radius:50%;border:2px solid transparent}
 .sw.on{border-color:#111}
 
-.month-nav{display:flex;align-items:center;justify-content:space-between;margin:10px 0 8px}
+.month-nav{display:flex;align-items:center;justify-content:space-between;margin:10px 0 8px;position:relative}
+.month-nav .mn-r{display:flex;align-items:center}
 .cal-tabs{display:flex;justify-content:stretch;gap:0;border-bottom:1px solid #ebe9e4;margin:0 -22px 12px;padding:0 14px;overflow-x:auto;scrollbar-width:none}
 .cal-tabs::-webkit-scrollbar{display:none}
 .cal-tabs button{flex:1 1 0;min-width:0;padding:10px 4px 9px;text-align:center;font-size:15px;color:#9a9a9e;font-weight:600;border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap}
@@ -243,8 +244,14 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .wk-na{color:#bbb}
 .month-nav span{font-size:20px;font-weight:700}
 .month-nav button{width:40px;height:40px;font-size:24px;border-radius:20px;text-align:center}
-.month-nav span{display:inline-flex;align-items:center;gap:4px}
-.month-nav .cal-ex{width:34px;height:34px;display:inline-grid;place-items:center;color:#555;margin-right:-34px}
+.month-nav span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);line-height:1;white-space:nowrap;pointer-events:none}
+.month-nav button{display:inline-grid;place-items:center;padding:0;line-height:0}
+.month-nav button svg{display:block}
+.month-nav .cal-ex{width:36px;height:40px;display:inline-grid;place-items:center;color:#555;margin-right:-8px}
+@keyframes calInL{from{opacity:.2;transform:translateX(40px)}to{opacity:1;transform:none}}
+@keyframes calInR{from{opacity:.2;transform:translateX(-40px)}to{opacity:1;transform:none}}
+.cal-body.in-l{animation:calInL .22s ease-out}.cal-body.in-r{animation:calInR .22s ease-out}
+.cal-body{touch-action:pan-y}
 .calex-img{display:block;width:100%;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
 .cal{margin:0 -18px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px 2px}
 .cal-body{grid-auto-rows:1fr}   /* 모든 칸 높이를 그 달에서 가장 큰 칸에 맞춰 똑같이 */
@@ -584,7 +591,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-11-120';
+const APP_VERSION = '2026-11-12-122';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -2054,10 +2061,10 @@ function renderCal(data){
   }
   const TABS = [['all', '전체'], ['size', '사이즈'], ['comp', '체성분'], ['ex', '운동']];
   $('#view-cal').innerHTML = `
-    <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월<button class="cal-ex" data-act="calExport" aria-label="기록 내보내기"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></button></span><button data-act="mnext">›</button></div>
+    <div class="month-nav"><button data-act="mprev" aria-label="이전 달"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span>${y}년 ${m}월</span><div class="mn-r"><button data-act="mnext" aria-label="다음 달"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button><button class="cal-ex" data-act="calExport" aria-label="기록 내보내기"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></button></div></div>
     <div class="cal-tabs">${TABS.map(([k, n], i) => `<button class="${ctab === k ? 'on' : ''}" data-ctab="${k}">${n}</button>${i === 0 ? '<span class="cal-tabs-div"></span>' : ''}`).join('')}</div>
     <div class="cal">${wds.map(w => `<div class="wd${w === '일' ? ' sun' : w === '토' ? ' sat' : ''}">${w}</div>`).join('')}</div>
-    <div class="cal cal-body">${cells}</div>
+    <div class="cal cal-body${S.calAnim ? ' in-' + S.calAnim : ''}">${cells}</div>
     ${below}`;
 }
 /* 신체 탭 아래: 주별 평균 + 전주 대비 변화 (앞뒤 달 기록도 함께 써요) */
@@ -3099,11 +3106,29 @@ function bind(){
     const cell = e.target.closest('[data-date]');
     if (cell) { if (lpFired) { lpFired = false; return; } S.date = cell.dataset.date; setTab('today'); return; }
     const el = e.target.closest('[data-act]'); if (!el) return;
-    const p = S.ym.split('-').map(Number);
-    const nd = new Date(p[0], p[1] - 1 + (el.dataset.act === 'mnext' ? 1 : -1), 1);
-    S.ym = nd.getFullYear() + '-' + pad(nd.getMonth() + 1);
-    loadMonth();
+    calMove(el.dataset.act === 'mnext' ? 1 : -1);
   });
+  // 달력을 왼쪽으로 밀면 다음 달, 오른쪽으로 밀면 이전 달
+  function calMove(dir, anim){
+    const p = S.ym.split('-').map(Number);
+    const nd = new Date(p[0], p[1] - 1 + dir, 1);
+    S.ym = nd.getFullYear() + '-' + pad(nd.getMonth() + 1);
+    S.calAnim = anim ? (dir > 0 ? 'l' : 'r') : '';
+    loadMonth();
+    setTimeout(() => { S.calAnim = ''; }, 400);
+  }
+  let swX = null, swY = 0;
+  $('#view-cal').addEventListener('touchstart', e => {
+    swX = e.target.closest('.cal-body') && e.touches.length === 1 ? e.touches[0].clientX : null;
+    if (swX != null) swY = e.touches[0].clientY;
+  }, { passive: true });
+  $('#view-cal').addEventListener('touchend', e => {
+    if (swX == null) return;
+    const t = e.changedTouches[0], dx = t.clientX - swX, dy = t.clientY - swY; swX = null;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    lpCancel(); lpFired = true;   // 밀고 난 뒤 따라오는 '탭'으로 날짜가 열리지 않게
+    calMove(dx < 0 ? 1 : -1, true);
+  }, { passive: true });
 
   $('#countBtn').onclick = openCount;
   $('#sheetBody').addEventListener('click', e => {
