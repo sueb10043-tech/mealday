@@ -243,6 +243,9 @@ textarea{width:100%;border:0;border-radius:20px;padding:16px;background:#fff;fon
 .wk-na{color:#bbb}
 .month-nav span{font-size:20px;font-weight:700}
 .month-nav button{width:40px;height:40px;font-size:24px;border-radius:20px;text-align:center}
+.month-nav span{display:inline-flex;align-items:center;gap:4px}
+.month-nav .cal-ex{width:34px;height:34px;display:inline-grid;place-items:center;color:#555;margin-right:-34px}
+.calex-img{display:block;width:100%;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
 .cal{margin:0 -18px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px 2px}
 .cal-body{grid-auto-rows:1fr}   /* 모든 칸 높이를 그 달에서 가장 큰 칸에 맞춰 똑같이 */
 .wd{color:#555;font-weight:600;font-size:13px;text-align:center;padding-bottom:6px}
@@ -581,7 +584,7 @@ const S = {
  */
 const EXEC_URL = '';
 /* 화면 버전: 코드를 고칠 때마다 바뀌어요. 홈 화면 앱이 예전 화면을 붙잡고 있으면 이걸 보고 새 화면으로 바꿔요. */
-const APP_VERSION = '2026-11-11-119';
+const APP_VERSION = '2026-11-11-120';
 const IN_GAS = !!(window.google && google.script && google.script.run);   // Apps Script 주소로 열었을 때
 const EXEC = EXEC_URL || lsGet('md_exec') || '';
 const DEMO = !IN_GAS && !EXEC;
@@ -2051,7 +2054,7 @@ function renderCal(data){
   }
   const TABS = [['all', '전체'], ['size', '사이즈'], ['comp', '체성분'], ['ex', '운동']];
   $('#view-cal').innerHTML = `
-    <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월</span><button data-act="mnext">›</button></div>
+    <div class="month-nav"><button data-act="mprev">‹</button><span>${y}년 ${m}월<button class="cal-ex" data-act="calExport" aria-label="기록 내보내기"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></button></span><button data-act="mnext">›</button></div>
     <div class="cal-tabs">${TABS.map(([k, n], i) => `<button class="${ctab === k ? 'on' : ''}" data-ctab="${k}">${n}</button>${i === 0 ? '<span class="cal-tabs-div"></span>' : ''}`).join('')}</div>
     <div class="cal">${wds.map(w => `<div class="wd${w === '일' ? ' sun' : w === '토' ? ' sat' : ''}">${w}</div>`).join('')}</div>
     <div class="cal cal-body">${cells}</div>
@@ -2850,6 +2853,104 @@ async function shareExport(){
   toast('이미지를 길게 눌러 저장·공유해 주세요');
 }
 
+/* ───── 기록(달력) 내보내기: 지금 보고 있는 달력 화면을 그대로 이미지로 ───── */
+// 화면에 그려진 칸·글자의 위치와 색을 읽어서 캔버스에 다시 그려요 (외부 라이브러리 없이)
+function domToCanvas(root, opt){
+  const SC = 2, W = opt.width, HEAD = opt.head || 0;
+  const r0 = { left: opt.left, top: opt.top };
+  const c = document.createElement('canvas');
+  c.width = W * SC; c.height = (opt.height + HEAD) * SC;
+  const g = c.getContext('2d'); g.scale(SC, SC);
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, opt.height + HEAD);
+  if (opt.drawHead) opt.drawHead(g, W);
+  g.translate(0, HEAD);
+  const alpha = col => { const m = String(col).match(/rgba?\(([^)]+)\)/); if (!m) return 0; const p = m[1].split(',').map(Number); return p.length > 3 ? p[3] : 1; };
+  const rr = (x, y, w, h, r) => { r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  const range = document.createRange();
+  const walk = (el, op = 1) => {
+    g.globalAlpha = op;
+    if (el.nodeType === 3) {   // 글자: 줄마다 나눠서 제자리에
+      const t = el.textContent; if (!t.trim()) return;
+      const cs = getComputedStyle(el.parentElement);
+      g.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      g.fillStyle = cs.color; g.textBaseline = 'middle';
+      let line = '', lx = 0, ly = null, lh = 0;
+      const flush = () => { if (line.trim() && ly != null) g.fillText(line, lx - r0.left, ly + lh / 2 - r0.top + 0.5); line = ''; ly = null; };
+      const chars = Array.from(t); let off = 0;
+      chars.forEach(ch => {
+        range.setStart(el, off); range.setEnd(el, off + ch.length); off += ch.length;
+        const rc = range.getClientRects()[0];
+        if (!rc || !rc.width) { if (ly != null) line += ch; return; }
+        if (ly == null || Math.abs(rc.top - ly) > rc.height / 2) { flush(); lx = rc.left; ly = rc.top; lh = rc.height; }
+        line += ch;
+      });
+      flush();
+      return;
+    }
+    if (el.nodeType !== 1) return;
+    if (el.matches('.month-nav,.cal-tabs,.note-add,[data-noexp]')) return;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return;
+    op *= +cs.opacity; g.globalAlpha = op;
+    const b = el.getBoundingClientRect();
+    const x = b.left - r0.left, y = b.top - r0.top, rad = parseFloat(cs.borderTopLeftRadius) || 0;
+    if (alpha(cs.backgroundColor) > 0) { g.fillStyle = cs.backgroundColor; rr(x, y, b.width, b.height, rad); g.fill(); }
+    const bw = parseFloat(cs.borderTopWidth) || 0;
+    if (bw > 0 && cs.borderTopStyle !== 'none' && alpha(cs.borderTopColor) > 0) {
+      g.strokeStyle = cs.borderTopColor; g.lineWidth = bw;
+      if (parseFloat(cs.borderLeftWidth) > 0) { rr(x + bw / 2, y + bw / 2, b.width - bw, b.height - bw, Math.max(0, rad - bw / 2)); g.stroke(); }
+      else { g.beginPath(); g.moveTo(x, y + bw / 2); g.lineTo(x + b.width, y + bw / 2); g.stroke(); }
+    }
+    const bb = parseFloat(cs.borderBottomWidth) || 0;
+    if (bb > 0 && !bw && alpha(cs.borderBottomColor) > 0) { g.strokeStyle = cs.borderBottomColor; g.lineWidth = bb; g.beginPath(); g.moveTo(x, y + b.height - bb / 2); g.lineTo(x + b.width, y + b.height - bb / 2); g.stroke(); }
+    const bl = parseFloat(cs.borderLeftWidth) || 0;
+    if (bl > 0 && !bw && alpha(cs.borderLeftColor) > 0) { g.strokeStyle = cs.borderLeftColor; g.lineWidth = bl; g.beginPath(); g.moveTo(x + bl / 2, y); g.lineTo(x + bl / 2, y + b.height); g.stroke(); }
+    const sh = cs.boxShadow;   // 메모 동그라미 (inset 테두리)
+    if (sh && sh !== 'none' && /inset/.test(sh)) {
+      const m = sh.match(/(rgba?\([^)]+\))\s+0px\s+0px\s+0px\s+([\d.]+)px\s+inset/) || sh.match(/inset\s+0px\s+0px\s+0px\s+([\d.]+)px\s+(rgba?\([^)]+\))/);
+      if (m) { const col = /rgb/.test(m[1]) ? m[1] : m[2], w = parseFloat(/rgb/.test(m[1]) ? m[2] : m[1]);
+        g.strokeStyle = col; g.lineWidth = w; rr(x + w / 2, y + w / 2, b.width - w, b.height - w, Math.max(0, rad - w / 2)); g.stroke(); }
+    }
+    el.childNodes.forEach(k => walk(k, op));
+  };
+  root.forEach(k => walk(k));
+  g.globalAlpha = 1;
+  return c;
+}
+async function exportCal(){
+  const v = $('#view-cal'), first = v.querySelector('.cal'); if (!first) return;
+  const vr = v.getBoundingClientRect(), kids = [...v.children].filter(k => !k.matches('.month-nav,.cal-tabs'));
+  const top = first.getBoundingClientRect().top - 6, bottom = Math.max(...kids.map(k => k.getBoundingClientRect().bottom)) + 18;
+  const [y, m] = S.ym.split('-').map(Number);
+  const tabName = { all: '전체', size: '사이즈', comp: '체성분', ex: '운동' }[S.calTab || 'all'] || '';
+  const W = Math.round(vr.width);
+  let url;
+  try {
+    const c = domToCanvas(kids, { left: vr.left, top, width: W, height: Math.ceil(bottom - top), head: 64,
+      drawHead(g, w){
+        g.fillStyle = '#111'; g.textBaseline = 'alphabetic';
+        g.font = '800 21px -apple-system, "Apple SD Gothic Neo", sans-serif'; g.fillText(`${y}년 ${m}월`, 22, 40);
+        const tw = g.measureText(`${y}년 ${m}월`).width;
+        g.font = '600 14px -apple-system, "Apple SD Gothic Neo", sans-serif'; g.fillStyle = '#8e8e93'; g.fillText('기록 · ' + tabName, 22 + tw + 10, 40);
+        g.font = 'italic 600 17px Georgia, serif'; g.fillStyle = '#9a8a76'; g.textAlign = 'right'; g.fillText('mealday', w - 22, 40); g.textAlign = 'left';
+      } });
+    url = c.toDataURL('image/jpeg', 0.92);
+  } catch(e){ fail(e); return; }
+  const name = `mealday_${S.ym}_${tabName}.jpg`;
+  openSheet({
+    title: '기록 내보내기', saveLabel: '공유', tall: true,
+    html: `<img class="calex-img" src="${url}" alt=""><p class="hint" style="margin-top:10px">지금 보고 있는 달력(${tabName}) 그대로 이미지로 만들었어요. 공유가 안 되면 이미지를 길게 눌러 저장하세요.</p>`,
+    async save(){
+      try {
+        const file = new File([await (await fetch(url)).blob()], name, { type: 'image/jpeg' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return false; }
+      } catch(e){ if (e && e.name === 'AbortError') return false; }
+      toast('이미지를 길게 눌러 저장·공유해 주세요');
+      return false;
+    }
+  });
+}
+
 /* ───── 검색: 식사 메모 · 일기에서 키워드 찾기 ───── */
 // 띄어 쓴 낱말 중 하나라도 들어간 기록을 모두 찾아요 (예: '닭 샐러드' → 닭 또는 샐러드)
 const srchWords = q => String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
@@ -2994,6 +3095,7 @@ function bind(){
     const ni = e.target.closest('[data-note]');
     if (ni) { openNote(ni.dataset.note, ni.dataset.nd); return; }
     if (e.target.closest('[data-act="noteAdd"]')) { openNote(null); return; }
+    if (e.target.closest('[data-act="calExport"]')) { exportCal(); return; }
     const cell = e.target.closest('[data-date]');
     if (cell) { if (lpFired) { lpFired = false; return; } S.date = cell.dataset.date; setTab('today'); return; }
     const el = e.target.closest('[data-act]'); if (!el) return;
